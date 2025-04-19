@@ -5,12 +5,10 @@
     /static
     /templates
     app.py
-<pre lang="md"> <code> ``` 
-project/ 
+<pre lang="md"><code>project/ 
 ├── static/ 
 ├── templates/ 
-└── app.py 
-``` </code> </pre>
+└── app.py</code></pre>
 
 - app.py: Це основний файл додатка, де визначаються маршрути та подання.
 - /templates: Це директорія, в якій зберігаються всі HTML-шаблони. Flask автоматично шукає шаблони в папці з ім'ям templates. Приклади шаблонів можуть включати hello.html, index.html, about.html і так далі.
