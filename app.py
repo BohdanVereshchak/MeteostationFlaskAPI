@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
-from datetime import datetime
 from config.config_db import *
+from datetime import datetime, timezone
+import time
 
 
 app = Flask(__name__)
@@ -21,12 +22,66 @@ def hello_world():
     return 'Hello, World!'
 
 
-@app.route('/api/sensors', methods=['POST'])
+@app.route('/api/data', methods=['POST'])
 def receive_data():
     data = request.json
     data['timestamp'] = datetime.now()
     collection.insert_one(data)
     return jsonify({"status": "success"}), 201
+
+
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1))
+    return jsonify(data)
+
+
+#http://127.0.0.1:3000/api/data/stats?days=7
+@app.route('/api/data/stats', methods=['GET'])
+def get_stats():
+    from datetime import timedelta
+
+    try:
+        days = int(request.args.get('days', 1))  # значення за замовчуванням — 1 день
+        if days < 1:
+            return jsonify({"error": "Days must be >= 1"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid 'days' parameter"}), 400
+
+    now = datetime.now()
+    past = now - timedelta(days=days)
+
+# Добавити інші дані
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": past}}},
+        {"$group": {
+            "_id": None,
+            "avg_temp": {"$avg": "$environment.temperature"},
+            "min_temp": {"$min": "$environment.temperature"},
+            "max_temp": {"$max": "$environment.temperature"},
+        }}
+    ]
+    stats = list(collection.aggregate(pipeline))
+    return jsonify(stats[0] if stats else {}), 200
+
+
+@app.route("/time", methods=["GET"])
+def get_time():
+    try:
+        now = datetime.now()
+        response = {
+            "unix_time": int(now.timestamp()),
+            "iso_datetime": now.isoformat(timespec='seconds'),
+            "timezone": "UTC"
+        }
+        resp = make_response(jsonify(response), 200)
+        resp.headers['Content-Type'] = 'application/json'
+        resp.headers['Content-Length'] = str(len(resp.data))
+        resp.headers['Connection'] = 'close'
+        return resp
+    except Exception as e:
+        app.logger.error(f"Time endpoint error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
