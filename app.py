@@ -14,6 +14,7 @@ CORS(app)
 client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
+config = db[CONFIG_NAME]
 
 
 @app.route('/')
@@ -36,7 +37,7 @@ def get_data():
     return jsonify(data)
 
 
-#http://127.0.0.1:3000/api/data/stats?days=7
+# http://127.0.0.1:3000/api/data/stats?days=7
 @app.route('/api/data/stats', methods=['GET'])
 def get_stats():
     from datetime import timedelta
@@ -63,6 +64,22 @@ def get_stats():
     ]
     stats = list(collection.aggregate(pipeline))
     return jsonify(stats[0] if stats else {}), 200
+
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    result = config.find_one({}, {'_id': 0})
+    if result:
+        return jsonify(result)
+    else:
+        return jsonify({"error": "No config found"}), 404
+
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    new_config = request.json
+    config.update_one({}, {'$set': new_config}, upsert=True)
+    return jsonify({"status": "updated"}), 200
 
 
 @app.route("/time", methods=["GET"])
