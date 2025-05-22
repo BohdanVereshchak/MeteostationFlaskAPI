@@ -5,9 +5,11 @@ from pymongo.server_api import ServerApi
 from config.config_db import *
 from datetime import datetime, timezone
 import time
-
+from flask import render_template
 
 app = Flask(__name__)
+
+
 CORS(app)
 
 # Підключення до MongoDB
@@ -17,16 +19,20 @@ collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
 
 
+# @app.route('/')
+# def hello_world():
+#     # for web
+#     return 'Hello, World!'
+
 @app.route('/')
-def hello_world():
-    # for web
-    return 'Hello, World!'
+def main_page():
+    return render_template("index.html")
 
 
 @app.route('/api/data', methods=['POST'])
 def receive_data():
     data = request.json
-    data['timestamp'] = datetime.now()
+    data['timestamp'] = datetime.now(timezone.utc)
     collection.insert_one(data)
     return jsonify({"status": "success"}), 201
 
@@ -34,6 +40,7 @@ def receive_data():
 @app.route('/api/data', methods=['GET'])
 def get_data():
     data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1))
+    print("Fetched data:", data)
     return jsonify(data)
 
 
@@ -100,6 +107,20 @@ def get_time():
         app.logger.error(f"Time endpoint error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# Шлях для сторінок
+@app.route("/web", methods=["GET"])
+def index_page():
+    return render_template("index.html")
+
+@app.route("/web/history")
+def history_page():
+    return render_template("history.html")
+
+@app.route("/web/settings")
+def settings_page():
+    return render_template("settings.html")
 
 if __name__ == '__main__':
+    
     app.run(host="0.0.0.0", port=3000, debug=True)
+

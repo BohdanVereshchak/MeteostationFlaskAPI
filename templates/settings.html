@@ -1,0 +1,45 @@
+
+{% extends "base.html" %}
+{% block title %}Налаштування{% endblock %}
+{% block content %}
+    <h2 class="mb-4">Налаштування станції</h2>
+    <div class="card p-4 shadow-sm">
+        <form id="configForm">
+            <div class="mb-3">
+                <label for="interval" class="form-label">Інтервал вимірювань (секунди)</label>
+                <input type="number" class="form-control" id="interval" name="interval" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Зберегти</button>
+        </form>
+    </div>
+
+    <script>
+        // Load current config
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(config => {
+                document.getElementById('interval').value = config.interval || 300;
+            });
+
+        // Handle form submission
+        document.getElementById('configForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                interval: parseInt(document.getElementById('interval').value)
+            };
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    alert('Налаштування збережено');
+                }
+            } catch (err) {
+                alert('Помилка збереження');
+            }
+        };
+    </script>
+{% endblock %}
