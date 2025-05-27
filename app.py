@@ -3,7 +3,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from config.config_db import *
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import time
 from flask import render_template
 
@@ -32,14 +32,13 @@ def main_page():
 @app.route('/api/data', methods=['POST'])
 def receive_data():
     data = request.json
-    data['timestamp'] = datetime.now(timezone.utc)
     collection.insert_one(data)
     return jsonify({"status": "success"}), 201
 
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1))
+    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(20))
     print("Fetched data:", data)
     return jsonify(data)
 
@@ -47,10 +46,8 @@ def get_data():
 # http://127.0.0.1:3000/api/data/stats?days=7
 @app.route('/api/data/stats', methods=['GET'])
 def get_stats():
-    from datetime import timedelta
-
     try:
-        days = int(request.args.get('days', 1))  # значення за замовчуванням — 1 день
+        days = int(request.args.get('days', 1))
         if days < 1:
             return jsonify({"error": "Days must be >= 1"}), 400
     except ValueError:
@@ -58,10 +55,30 @@ def get_stats():
 
     now = datetime.now()
     past = now - timedelta(days=days)
+    past_str = past.strftime("%Y-%m-%d %H:%M:%S")
 
-# Добавити інші дані
+    # Найближчий до часу `past_str`, але не пізніше (≤)
+    first = collection.find_one(
+        {"timestamp": {"$lte": past_str}},
+        sort=[("timestamp", -1)]
+    )
+
+    # Найновіший запис (використаємо поточний час як максимум)
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    last = collection.find_one(
+        {"timestamp": {"$lte": now_str}},
+        sort=[("timestamp", -1)]
+    )
+
+    rainfall_mm = None
+    if first and last:
+        t1 = first.get("rainfall", {}).get("tips", 0)
+        t2 = last.get("rainfall", {}).get("tips", 0)
+        rainfall_mm = round((t2 - t1) * 0.987, 2)
+
+    # Агрегація температури з моменту "past_str" (тобто все, що було після дня назад)
     pipeline = [
-        {"$match": {"timestamp": {"$gte": past}}},
+        {"$match": {"timestamp": {"$gte": past_str}}},
         {"$group": {
             "_id": None,
             "avg_temp": {"$avg": "$environment.temperature"},
@@ -69,9 +86,100 @@ def get_stats():
             "max_temp": {"$max": "$environment.temperature"},
         }}
     ]
-    stats = list(collection.aggregate(pipeline))
-    return jsonify(stats[0] if stats else {}), 200
 
+    stats = list(collection.aggregate(pipeline))
+    result = stats[0] if stats else {}
+    result["rainfall_mm"] = rainfall_mm
+    return jsonify(result), 200
+
+@app.route('/api/data/rainfall', methods=['GET'])
+def get_rainfall():
+    try:
+        # Get interval from query params (in hours)
+        interval_hours = int(request.args.get('interval', 1))
+        if interval_hours < 1:
+            return jsonify({"error": "Interval must be >= 1 hour"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid 'interval' parameter"}), 400
+
+    now = datetime.now()
+    past = now - timedelta(hours=interval_hours)
+    past_str = past.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Find the closest record to the past time (<=)
+    first = collection.find_one(
+        {"timestamp": {"$lte": past_str}},
+        sort=[("timestamp", -1)]
+    )
+
+    # Find the most recent record (<= now)
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    last = collection.find_one(
+        {"timestamp": {"$lte": now_str}},
+        sort=[("timestamp", -1)]
+    )
+
+    rainfall_mm = 0
+    if first and last:
+        t1 = first.get("rainfall", {}).get("tips", 0)
+        t2 = last.get("rainfall", {}).get("tips", 0)
+        rainfall_mm = round((t2 - t1) * 0.987, 2)
+
+    return jsonify({
+        "interval_hours": interval_hours,
+        "rainfall_mm": rainfall_mm,
+        "start_time": first["timestamp"] if first else None,
+        "end_time": last["timestamp"] if last else None
+    }), 200
+
+@app.route('/api/data/hourly_rainfall', methods=['GET'])
+def get_hourly_rainfall():
+    try:
+        # Кількість годин для аналізу (за замовчуванням 24)
+        hours = int(request.args.get('hours', 6))
+        if hours < 1:
+            return jsonify({"error": "Hours must be >= 1"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid 'hours' parameter"}), 400
+
+    now = datetime.now()
+    data_points = []
+    offset = timedelta(hours=3)  # Український час (UTC+3)
+    for i in range(hours, 0, -1):
+        end_time = now - timedelta(hours=i-1)-timedelta(hours=3)
+        start_time = now - timedelta(hours=i)-timedelta(hours=3)
+        
+        end_with_offset = end_time + offset
+
+        start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Знаходимо найближчі записи до початку та кінця годинного інтервалу
+        start_record = collection.find_one(
+            {"timestamp": {"$lte": start_str}},
+            sort=[("timestamp", -1)]
+        )
+        end_record = collection.find_one(
+            {"timestamp": {"$lte": end_str}},
+            sort=[("timestamp", -1)]
+        )
+
+        rainfall_mm = 0
+        if start_record and end_record:
+            t1 = start_record.get("rainfall", {}).get("tips", 0)
+            t2 = end_record.get("rainfall", {}).get("tips", 0)
+            rainfall_mm = round((t2 - t1) * 0.987, 2)
+
+        data_points.append({
+            "hour": end_with_offset.hour,
+            "rainfall_mm": rainfall_mm,
+            "time_label": end_with_offset.strftime("%H:%M")
+        })
+
+    return jsonify({
+        "hours": hours,
+        "data": data_points
+    }), 200
 
 @app.route('/api/config', methods=['GET'])
 def get_config():

@@ -24,6 +24,8 @@
                         <th>Температура</th>
                         <th>Вологість</th>
                         <th>Тиск</th>
+                        <th>VOC</th>
+                        <th>CO₂</th>
                         <th>Опади</th>
                     </tr>
                 </thead>
@@ -44,6 +46,7 @@
                             <li class="list-group-item">Середня температура: ${stats.avg_temp?.toFixed(1) || 'N/A'} °C</li>
                             <li class="list-group-item">Мінімальна температура: ${stats.min_temp?.toFixed(1) || 'N/A'} °C</li>
                             <li class="list-group-item">Максимальна температура: ${stats.max_temp?.toFixed(1) || 'N/A'} °C</li>
+                            <li class="list-group-item">Опади: ${stats.rainfall_mm ?? 'N/A'} мм/м²</li>
                         </ul>`;
                     document.getElementById('stats').innerHTML = html;
                 });
@@ -56,11 +59,28 @@
                 .then(data => {
                     const rows = data.map(item => `
                         <tr>
-                            <td>${new Date(item.timestamp).toLocaleString()}</td>
+                            <td>${
+                            (() => {
+                                const date = new Date(item.timestamp);
+                                date.setHours(date.getHours() + 3);
+                                return date.toLocaleString('uk-UA', {
+                                timeZone: 'Europe/Kiev',
+                                hour12: false,
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                                });
+                            })()
+                            }</td>
                             <td>${item.environment.temperature} °C</td>
                             <td>${item.environment.humidity} %</td>
                             <td>${item.environment.pressure} гПа</td>
-                            <td>${item.rainfall.tips * 0.631356.toFixed(4)} мм/м2</td>
+                            <td>${item.air_quality.tvoc} Ppb</td>
+                            <td>${item.air_quality.eco2} ppm CO2</td>
+                            <td>${item.rainfall.tips * 0.987.toFixed(4)} мм/м2</td>
                         </tr>
                     `).join('');
                     document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';

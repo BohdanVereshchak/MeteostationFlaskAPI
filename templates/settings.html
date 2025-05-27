@@ -5,8 +5,8 @@
 <div class="card p-4 shadow-sm">
     <form id="configForm">
         <div class="mb-3">
-            <label for="interval" class="form-label">Інтервал вимірювань (секунди)</label>
-            <input type="number" class="form-control" id="interval" name="interval" required min="1">
+            <label for="update_interval" class="form-label">Інтервал вимірювань (секунди)</label>
+            <input type="number" class="form-control" id="update_interval" name="update_interval" required min="1">
         </div>
 
         <div class="mb-3">
@@ -38,26 +38,36 @@
 </div>
 
 <script>
-    // Завантаження конфігу 
+    // Завантаження конфігурації
     fetch('/api/config')
         .then(res => res.json())
         .then(config => {
-            document.getElementById('interval').value = config.interval || 300;
-            document.getElementById('temp_min').value = config.temp_min ?? '';
-            document.getElementById('temp_max').value = config.temp_max ?? '';
-            document.getElementById('hum_min').value = config.hum_min ?? '';
-            document.getElementById('hum_max').value = config.hum_max ?? '';
+            const intervalMs = config.system?.update_interval_ms || 300000;
+            document.getElementById('update_interval').value = intervalMs / 1000;
+
+            document.getElementById('temp_min').value = config.temperature?.min ?? '';
+            document.getElementById('temp_max').value = config.temperature?.max ?? '';
+            document.getElementById('hum_min').value = config.humidity?.min ?? '';
+            document.getElementById('hum_max').value = config.humidity?.max ?? '';
         });
 
-    // Обробка форми
     document.getElementById('configForm').onsubmit = async (e) => {
         e.preventDefault();
+
+        const updateIntervalSec = parseInt(document.getElementById('update_interval').value);
+
         const data = {
-            interval: parseInt(document.getElementById('interval').value),
-            temp_min: parseFloat(document.getElementById('temp_min').value),
-            temp_max: parseFloat(document.getElementById('temp_max').value),
-            hum_min: parseFloat(document.getElementById('hum_min').value),
-            hum_max: parseFloat(document.getElementById('hum_max').value)
+            system: {
+                update_interval_ms: updateIntervalSec * 1000
+            },
+            temperature: {
+                min: parseFloat(document.getElementById('temp_min').value) || null,
+                max: parseFloat(document.getElementById('temp_max').value) || null
+            },
+            humidity: {
+                min: parseFloat(document.getElementById('hum_min').value) || null,
+                max: parseFloat(document.getElementById('hum_max').value) || null
+            }
         };
 
         try {
@@ -66,6 +76,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
+
             if (response.ok) {
                 alert('Налаштування збережено');
             } else {
