@@ -12,9 +12,10 @@
             document.getElementById("weather").innerHTML = "<p>Немає даних</p>";
             return;
         }
-
+        
         const env = data[0].environment;
         const rain = data[0].rainfall;
+        const air_quality = data[0].air_quality;
 
         const html = `
             <h4>Дані станом на ${new Date(data[0].timestamp).toLocaleString()}</h4>
@@ -22,7 +23,9 @@
                 <li class="list-group-item">Температура: ${env.temperature} °C</li>
                 <li class="list-group-item">Тиск: ${env.pressure} гПа</li>
                 <li class="list-group-item">Вологість: ${env.humidity} %</li>
-                <li class="list-group-item">Опади: ${rain.tips} tips</li>
+                <li class="list-group-item">Опади: ${ (rain.tips * 0.631356).toFixed(4) } мм/м2</li>
+                <li class="list-group-item">CO2: ${air_quality.eco2}</li>
+                <li class="list-group-item">VOC: ${air_quality.tvoc}</li>
 
             </ul>`;
         document.getElementById("weather").innerHTML = html;

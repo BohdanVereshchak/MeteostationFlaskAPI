@@ -49,6 +49,7 @@
                 });
         }
 
+        
         function loadHistory() {
             fetch('/api/data')
                 .then(res => res.json())
@@ -59,7 +60,7 @@
                             <td>${item.environment.temperature} °C</td>
                             <td>${item.environment.humidity} %</td>
                             <td>${item.environment.pressure} гПа</td>
-                            <td>${item.environment.precipitation} мм</td>
+                            <td>${item.rainfall.tips * 0.631356.toFixed(4)} мм/м2</td>
                         </tr>
                     `).join('');
                     document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';
