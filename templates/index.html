@@ -12,22 +12,67 @@
             document.getElementById("weather").innerHTML = "<p>Немає даних</p>";
             return;
         }
-        
+
         const env = data[0].environment;
         const rain = data[0].rainfall;
         const air_quality = data[0].air_quality;
 
-        const html = `
-            <h4>Дані станом на ${new Date(data[0].timestamp).toLocaleString()}</h4>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item">Температура: ${env.temperature} °C</li>
-                <li class="list-group-item">Тиск: ${env.pressure} гПа</li>
-                <li class="list-group-item">Вологість: ${env.humidity} %</li>
-                <li class="list-group-item">Опади: ${ (rain.tips * 0.631356).toFixed(4) } мм/м2</li>
-                <li class="list-group-item">CO2: ${air_quality.eco2}</li>
-                <li class="list-group-item">VOC: ${air_quality.tvoc}</li>
+        const getColorLevels = (value, thresholds) => {
+    let levels = [false, false, false];
 
-            </ul>`;
+    if (value < thresholds[0]) {
+        levels[0] = true; // зелений
+    } else if (value < thresholds[1]) {
+        levels[0] = true;
+        levels[1] = true; // жовтий
+    } else {
+        levels = [true, true, true]; // червоний
+    }
+    return levels;
+};
+
+const renderBars = (levels) => {
+    return `
+        <div class="d-inline-block ms-2">
+            <span class="indicator ${levels[0] ? 'green' : ''}"></span>
+            <span class="indicator ${levels[1] ? 'yellow' : ''}"></span>
+            <span class="indicator ${levels[2] ? 'red' : ''}"></span>
+        </div>
+    `;
+};
+
+const html = `
+    <h4>Дані станом на ${new Date(data[0].timestamp).toLocaleString()}</h4>
+    <ul class="list-group list-group-flush">
+        <li class="list-group-item">
+            Температура: ${env.temperature} °C
+            ${renderBars(getColorLevels(env.temperature, [20, 30]))}
+        </li>
+        <li class="list-group-item">
+            Тиск: ${env.pressure} гПа
+            ${renderBars(getColorLevels(env.pressure, [1000, 1020]))}
+        </li>
+        <li class="list-group-item">
+            Вологість: ${env.humidity} %
+            ${renderBars(getColorLevels(env.humidity, [40, 70]))}
+        </li>
+        <li class="list-group-item">
+            Опади: ${(rain.tips * 0.631356).toFixed(2)} мм/м²
+            ${renderBars(getColorLevels(rain.tips * 0.631356, [0.5, 1]))}
+        </li>
+        <li class="list-group-item">
+            CO₂: ${air_quality.eco2}
+            ${renderBars(getColorLevels(air_quality.eco2, [800, 1500]))}
+        </li>
+        <li class="list-group-item">
+            VOC: ${air_quality.tvoc}
+            ${renderBars(getColorLevels(air_quality.tvoc, [100, 300]))}
+        </li>
+    </ul>
+`;
+
+
+            
         document.getElementById("weather").innerHTML = html;
     });
 
