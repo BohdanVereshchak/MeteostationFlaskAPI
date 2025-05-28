@@ -178,9 +178,17 @@
                 });
         }
 
-        appConfig = loadConfig();
+        async function initApp() {
+        try {
+            appConfig = await loadConfig();
+        } catch (error) {
+            console.error('Initialization error:', error);
+        }
+        }
 
-        fetch("/api/data")
+        initApp();
+
+        fetch("/api/data/last")
         .then(res => res.json())
         .then(data => {
             if (!data.length) {
@@ -257,19 +265,19 @@
                 })()}</h4>
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item">
-                        Температура: ${env.temperature} °C
+                        Температура: ${env.temperature.toFixed(2)} °C
                         ${renderBars(getColorLevels(env.temperature, [appConfig.temperature.min, appConfig.temperature.max]))}
                     </li>
                     <li class="list-group-item">
-                        Тиск: ${env.pressure} гПа
+                        Тиск: ${env.pressure.toFixed(2)} гПа
                         ${renderBars(getColorLevels(env.pressure, [900, 1100]))}
                     </li>
                     <li class="list-group-item">
-                        Вологість: ${env.humidity} %
+                        Вологість: ${env.humidity.toFixed(2)} %
                         ${renderBars(getColorLevels(env.humidity, [appConfig.humidity.min, appConfig.humidity.max]))}
                     </li>
                     <li class="list-group-item">
-                        VOC: ${air_quality.aqi}
+                        AQI: ${air_quality.aqi}
                         ${renderBars(getColorLevels(air_quality.aqi, [1, 2, 3, 4, 5]))}
                     </li>
                     <li class="list-group-item">

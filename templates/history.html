@@ -53,39 +53,54 @@
         }
 
         
-        function loadHistory() {
-            fetch('/api/data')
-                .then(res => res.json())
-                .then(data => {
-                    const rows = data.map(item => `
+        fetch('/api/data')
+            .then(res => res.json())
+            .then(data => {
+                
+                const rows = data.map((item, index) => {
+                    // Обчислюємо різницю в опадах
+                    let rainfallDiff = 0;
+                    if (index > 0) {
+                        const prevTips = data[index - 1].rainfall.tips;
+                        rainfallDiff = (item.rainfall.tips - prevTips) * 0.987;
+                    }
+
+                    // Форматуємо дату
+                    const formatDate = (timestamp) => {
+                        const date = new Date(timestamp);
+                        date.setHours(date.getHours() + 3);
+                        return date.toLocaleString('uk-UA', {
+                            timeZone: 'Europe/Kiev',
+                            hour12: false,
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        });
+                    };
+
+                    return `
                         <tr>
-                            <td>${
-                            (() => {
-                                const date = new Date(item.timestamp);
-                                date.setHours(date.getHours() + 3);
-                                return date.toLocaleString('uk-UA', {
-                                timeZone: 'Europe/Kiev',
-                                hour12: false,
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                                });
-                            })()
-                            }</td>
-                            <td>${item.environment.temperature} °C</td>
-                            <td>${item.environment.humidity} %</td>
-                            <td>${item.environment.pressure} гПа</td>
+                            <td>${formatDate(item.timestamp)}</td>
+                            <td>${item.environment.temperature.toFixed(2)} °C</td>
+                            <td>${item.environment.humidity.toFixed(2)} %</td>
+                            <td>${item.environment.pressure.toFixed(2)} гПа</td>
                             <td>${item.air_quality.tvoc} Ppb</td>
                             <td>${item.air_quality.eco2} ppm CO2</td>
-                            <td>${item.rainfall.tips * 0.987.toFixed(4)} мм/м2</td>
+                            <td>${rainfallDiff.toFixed(2)} мм</td>
                         </tr>
-                    `).join('');
-                    document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';
-                });
-        }
+                    `;
+                }).join('');
+
+                document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="7">Немає даних</td></tr>';
+            })
+            .catch(error => {
+                console.error('Помилка при отриманні даних:', error);
+                document.getElementById('historyData').innerHTML = 
+                    '<tr><td colspan="7">Помилка завантаження даних</td></tr>';
+            });
 
         document.getElementById('statsDays').onchange = (e) => {
             loadStats(e.target.value);

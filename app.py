@@ -1,4 +1,7 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, redirect, url_for
+from flask_socketio import SocketIO, emit
+
+import urllib.parse
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
@@ -8,9 +11,9 @@ import time
 from flask import render_template
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")  # Ініціалізація
 
-
-CORS(app)
+CORS(app, origins=["*"], allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
 
 # Підключення до MongoDB
 client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
@@ -32,9 +35,47 @@ def main_page():
 @app.route('/api/data', methods=['POST'])
 def receive_data():
     data = request.json
+    
+    # Отримуємо поточну конфігурацію
+    config_data = config.find_one({}, {'_id': 0})
+    
+    # Перевіряємо межі значень
+    alerts = []
+    
+    if 'environment' in data:
+        env = data['environment']
+        
+        # Перевірка температури
+        if 'temperature' in env and 'temperature' in config_data:
+            temp = env['temperature']
+            temp_config = config_data['temperature']
+            
+            if temp_config.get('min') is not None and temp < temp_config['min']:
+                alerts.append(f"⚠️ Температура нижче мінімуму: {temp:.2f} < {temp_config['min']}")
+            if temp_config.get('max') is not None and temp > temp_config['max']:
+                alerts.append(f"⚠️ Температура вище максимуму: {temp:.2f} > {temp_config['max']}")
+        
+        # Перевірка вологості
+        if 'humidity' in env and 'humidity' in config_data:
+            humidity = env['humidity']
+            humidity_config = config_data['humidity']
+            
+            if humidity_config.get('min') is not None and humidity < humidity_config['min']:
+                alerts.append(f"⚠️ Вологість нижче мінімуму: {humidity:.2f} < {humidity_config['min']}")
+            if humidity_config.get('max') is not None and humidity > humidity_config['max']:
+                alerts.append(f"⚠️ Вологість вище максимуму: {humidity:.2f} > {humidity_config['max']}")
+    
+    # Зберігаємо дані
     collection.insert_one(data)
-    return jsonify({"status": "success"}), 201
 
+    if alerts:
+        for a in alerts:
+            socketio.emit('alert', {'message': a})
+
+    return jsonify({
+        "status": "success",
+        "alerts": alerts
+    }), 201
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
@@ -42,6 +83,15 @@ def get_data():
     print("Fetched data:", data)
     return jsonify(data)
 
+@app.route('/api/data/all', methods=['GET'])
+def get_all_data():
+    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1))
+    return jsonify(data)
+
+@app.route('/api/data/last', methods=['GET'])
+def get_last_data():
+    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(1))
+    return jsonify(data)
 
 # http://127.0.0.1:3000/api/data/stats?days=7
 @app.route('/api/data/stats', methods=['GET'])
@@ -142,7 +192,8 @@ def get_hourly_rainfall():
     except ValueError:
         return jsonify({"error": "Invalid 'hours' parameter"}), 400
 
-    now = datetime.now()
+    now = datetime.now(tz=timezone.utc)
+    now = now.astimezone(timezone(timedelta(hours=3)))  # Перетворення на український час (UTC+3)
     data_points = []
     offset = timedelta(hours=3)  # Український час (UTC+3)
     for i in range(hours, 0, -1):
@@ -230,5 +281,5 @@ def settings_page():
 
 if __name__ == '__main__':
     
-    app.run(host="0.0.0.0", port=3000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=3000, debug=True)
 
