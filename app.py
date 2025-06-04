@@ -315,19 +315,11 @@ def get_weather_forecast():
 def get_weather_comparison():
     """Compare weather station data with forecast"""
     try:
-        # Get latest weather station data
-        if not weather_station_data:
-            # Generate current station data if none exists
-            station_data = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "environment": {
-                    "temperature": 22.5,
-                    "humidity": 65,
-                    "pressure": 1013.2
-                }
-            }
-        else:
-            station_data = weather_station_data[-1]
+        # Get latest weather station data from MongoDB
+        station_data = collection.find_one({}, {'_id': 0}, sort=[('timestamp', -1)])
+
+        if not station_data:
+            return jsonify({"error": "No weather station data found in database"}), 404
 
         # Get weather forecast
         forecast_response = get_weather_forecast()
@@ -377,7 +369,6 @@ def get_weather_comparison():
     except Exception as e:
         app.logger.error(f"Comparison error: {str(e)}")
         return jsonify({"error": "Помилка порівняння даних"}), 500
-
 
 # Шлях для сторінок
 @app.route("/web", methods=["GET"])
