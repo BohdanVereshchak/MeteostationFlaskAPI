@@ -10,6 +10,8 @@ from datetime import datetime, timezone, timedelta
 import time
 from flask import render_template
 
+import requests
+
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")  # Ініціалізація
 
@@ -21,6 +23,7 @@ db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
 
+weather_station_data = []
 
 # @app.route('/')
 # def hello_world():
@@ -35,36 +38,36 @@ def main_page():
 @app.route('/api/data', methods=['POST'])
 def receive_data():
     data = request.json
-    
+
     # Отримуємо поточну конфігурацію
     config_data = config.find_one({}, {'_id': 0})
-    
+
     # Перевіряємо межі значень
     alerts = []
-    
+
     if 'environment' in data:
         env = data['environment']
-        
+
         # Перевірка температури
         if 'temperature' in env and 'temperature' in config_data:
             temp = env['temperature']
             temp_config = config_data['temperature']
-            
+
             if temp_config.get('min') is not None and temp < temp_config['min']:
                 alerts.append(f"⚠️ Температура нижче мінімуму: {temp:.2f} < {temp_config['min']}")
             if temp_config.get('max') is not None and temp > temp_config['max']:
                 alerts.append(f"⚠️ Температура вище максимуму: {temp:.2f} > {temp_config['max']}")
-        
+
         # Перевірка вологості
         if 'humidity' in env and 'humidity' in config_data:
             humidity = env['humidity']
             humidity_config = config_data['humidity']
-            
+
             if humidity_config.get('min') is not None and humidity < humidity_config['min']:
                 alerts.append(f"⚠️ Вологість нижче мінімуму: {humidity:.2f} < {humidity_config['min']}")
             if humidity_config.get('max') is not None and humidity > humidity_config['max']:
                 alerts.append(f"⚠️ Вологість вище максимуму: {humidity:.2f} > {humidity_config['max']}")
-    
+
     # Зберігаємо дані
     collection.insert_one(data)
 
@@ -199,7 +202,7 @@ def get_hourly_rainfall():
     for i in range(hours, 0, -1):
         end_time = now - timedelta(hours=i-1)-timedelta(hours=3)
         start_time = now - timedelta(hours=i)-timedelta(hours=3)
-        
+
         end_with_offset = end_time + offset
 
         start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -266,6 +269,116 @@ def get_time():
         app.logger.error(f"Time endpoint error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/weather/forecast', methods=['GET'])
+def get_weather_forecast():
+    """Get weather forecast from OpenWeatherMap API"""
+    if not OPENWEATHER_API_KEY:
+        return jsonify({"error": "OpenWeatherMap API key not configured"}), 500
+
+    try:
+        # Get current weather data
+        url = f"https://api.openweathermap.org/data/2.5/weather"
+        params = {
+            'lat': WEATHER_LOCATION_LAT,
+            'lon': WEATHER_LOCATION_LON,
+            'appid': OPENWEATHER_API_KEY,
+            'units': 'metric'
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Extract relevant weather data
+        forecast_data = {
+            'temperature': data['main']['temp'],
+            'humidity': data['main']['humidity'],
+            'pressure': data['main']['pressure'],
+            'description': data['weather'][0]['description'],
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'location': data['name']
+        }
+
+        return jsonify(forecast_data), 200
+
+    except requests.RequestException as e:
+        app.logger.error(f"Weather API error: {str(e)}")
+        return jsonify({"error": "Помилка отримання даних прогнозу погоди"}), 500
+    except Exception as e:
+        app.logger.error(f"Forecast error: {str(e)}")
+        return jsonify({"error": "Внутрішня помилка сервера"}), 500
+
+
+@app.route('/api/weather/comparison', methods=['GET'])
+def get_weather_comparison():
+    """Compare weather station data with forecast"""
+    try:
+        # Get latest weather station data
+        if not weather_station_data:
+            # Generate current station data if none exists
+            station_data = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "environment": {
+                    "temperature": 22.5,
+                    "humidity": 65,
+                    "pressure": 1013.2
+                }
+            }
+        else:
+            station_data = weather_station_data[-1]
+
+        # Get weather forecast
+        forecast_response = get_weather_forecast()
+        if forecast_response[1] != 200:
+            return forecast_response
+
+        forecast_data = forecast_response[0].get_json()
+
+        # Calculate differences
+        station_temp = station_data['environment']['temperature']
+        station_humidity = station_data['environment']['humidity']
+        station_pressure = station_data['environment']['pressure']
+
+        forecast_temp = forecast_data['temperature']
+        forecast_humidity = forecast_data['humidity']
+        forecast_pressure = forecast_data['pressure']
+
+        comparison = {
+            'timestamp': station_data['timestamp'],
+            'temperature': {
+                'station': station_temp,
+                'forecast': forecast_temp,
+                'difference': round(station_temp - forecast_temp, 1),
+                'difference_percent': round(((station_temp - forecast_temp) / forecast_temp) * 100,
+                                            1) if forecast_temp != 0 else 0
+            },
+            'humidity': {
+                'station': station_humidity,
+                'forecast': forecast_humidity,
+                'difference': round(station_humidity - forecast_humidity, 1),
+                'difference_percent': round(((station_humidity - forecast_humidity) / forecast_humidity) * 100,
+                                            1) if forecast_humidity != 0 else 0
+            },
+            'pressure': {
+                'station': station_pressure,
+                'forecast': forecast_pressure,
+                'difference': round(station_pressure - forecast_pressure, 1),
+                'difference_percent': round(((station_pressure - forecast_pressure) / forecast_pressure) * 100,
+                                            1) if forecast_pressure != 0 else 0
+            },
+            'forecast_description': forecast_data['description'],
+            'location': forecast_data['location']
+        }
+
+        return jsonify(comparison), 200
+
+    except Exception as e:
+        app.logger.error(f"Comparison error: {str(e)}")
+        return jsonify({"error": "Помилка порівняння даних"}), 500
+
+
 # Шлях для сторінок
 @app.route("/web", methods=["GET"])
 def index_page():
@@ -279,7 +392,11 @@ def history_page():
 def settings_page():
     return render_template("settings.html")
 
+@app.route("/web/comparison")
+def comparison_page():
+    return render_template("comparison.html")
+
 if __name__ == '__main__':
-    
-    socketio.run(app, host='0.0.0.0', port=3000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=3000, debug=True, allow_unsafe_werkzeug=True)
+
 

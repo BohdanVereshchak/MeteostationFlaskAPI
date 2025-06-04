@@ -2,18 +2,6 @@
 {% block title %}Налаштування{% endblock %}
 {% block content %}
 <h2 class="mb-4">Налаштування станції</h2>
-<div class="card p-4 shadow-sm mb-4">
-    <h4>Сповіщення</h4>
-    <div class="mb-3">
-        <button type="button" class="btn btn-primary" id="enableNotifications">
-            Увімкнути push-сповіщення
-        </button>
-        <div id="notificationStatus" class="mt-2"></div>
-    </div>
-    <div class="alert alert-info">
-        <small>Push-сповіщення будуть надсилатися, коли температура або вологість виходять за межі встановлених значень.</small>
-    </div>
-</div>
 <div class="card p-4 shadow-sm">
     <form id="configForm">
         <div class="mb-3">
@@ -98,40 +86,5 @@
             alert('Помилка збереження');
         }
     };
-    // Notification settings
-    function updateNotificationStatus() {
-        const statusDiv = document.getElementById('notificationStatus');
-        const button = document.getElementById('enableNotifications');
-        
-        if ('Notification' in window) {
-            if (Notification.permission === 'granted') {
-                statusDiv.innerHTML = '<span class="text-success">✓ Сповіщення увімкнено</span>';
-                button.textContent = 'Сповіщення активні';
-                button.disabled = true;
-                button.classList.remove('btn-primary');
-                button.classList.add('btn-success');
-            } else if (Notification.permission === 'denied') {
-                statusDiv.innerHTML = '<span class="text-danger">✗ Сповіщення заблоковано в браузері</span>';
-                button.textContent = 'Розблокувати в налаштуваннях браузера';
-                button.disabled = true;
-            } else {
-                statusDiv.innerHTML = '<span class="text-warning">⚠ Дозвіл не надано</span>';
-            }
-        } else {
-            statusDiv.innerHTML = '<span class="text-danger">✗ Браузер не підтримує сповіщення</span>';
-            button.disabled = true;
-        }
-    }
-
-    document.getElementById('enableNotifications').onclick = function() {
-        if ('Notification' in window) {
-            Notification.requestPermission().then(permission => {
-                updateNotificationStatus();
-            });
-        }
-    };
-
-    // Update status on page load
-    updateNotificationStatus();
 </script>
 {% endblock %}

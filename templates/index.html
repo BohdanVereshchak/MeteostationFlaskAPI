@@ -178,17 +178,9 @@
                 });
         }
 
-        async function initApp() {
-        try {
-            appConfig = await loadConfig();
-        } catch (error) {
-            console.error('Initialization error:', error);
-        }
-        }
+        appConfig = loadConfig();
 
-        initApp();
-
-        fetch("/api/data/last")
+        fetch("/api/data")
         .then(res => res.json())
         .then(data => {
             if (!data.length) {
@@ -202,11 +194,11 @@
 
             const getColorLevels = (value, thresholds) => {
                 let levels = [false, false, false, false, false];
-                
+
                 if (value < thresholds[0]) {
                     return levels;
                 }
-                
+
                 if (thresholds.length === 2) {
                     const step = (thresholds[1] - thresholds[0]) / 5;
                     if (value < thresholds[0] + step) {
@@ -220,7 +212,7 @@
                     } else {
                         levels.fill(true);
                     }
-                } 
+                }
                 else if (thresholds.length === 5) {
                     if (value < thresholds[1]) {
                         levels[0] = true;
@@ -234,7 +226,7 @@
                         levels.fill(true);
                     }
                 }
-                
+
                 return levels;
             };
 
@@ -265,19 +257,19 @@
                 })()}</h4>
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item">
-                        Температура: ${env.temperature.toFixed(2)} °C
+                        Температура: ${env.temperature} °C
                         ${renderBars(getColorLevels(env.temperature, [appConfig.temperature.min, appConfig.temperature.max]))}
                     </li>
                     <li class="list-group-item">
-                        Тиск: ${env.pressure.toFixed(2)} гПа
+                        Тиск: ${env.pressure} гПа
                         ${renderBars(getColorLevels(env.pressure, [900, 1100]))}
                     </li>
                     <li class="list-group-item">
-                        Вологість: ${env.humidity.toFixed(2)} %
+                        Вологість: ${env.humidity} %
                         ${renderBars(getColorLevels(env.humidity, [appConfig.humidity.min, appConfig.humidity.max]))}
                     </li>
                     <li class="list-group-item">
-                        AQI: ${air_quality.aqi}
+                        VOC: ${air_quality.aqi}
                         ${renderBars(getColorLevels(air_quality.aqi, [1, 2, 3, 4, 5]))}
                     </li>
                     <li class="list-group-item">
