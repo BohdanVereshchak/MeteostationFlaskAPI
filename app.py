@@ -340,21 +340,21 @@ def get_weather_comparison():
         comparison = {
             'timestamp': station_data['timestamp'],
             'temperature': {
-                'station': station_temp,
+                'station': round(station_temp, 2),
                 'forecast': forecast_temp,
                 'difference': round(station_temp - forecast_temp, 1),
                 'difference_percent': round(((station_temp - forecast_temp) / forecast_temp) * 100,
                                             1) if forecast_temp != 0 else 0
             },
             'humidity': {
-                'station': station_humidity,
+                'station': round(station_humidity, 2),
                 'forecast': forecast_humidity,
                 'difference': round(station_humidity - forecast_humidity, 1),
                 'difference_percent': round(((station_humidity - forecast_humidity) / forecast_humidity) * 100,
                                             1) if forecast_humidity != 0 else 0
             },
             'pressure': {
-                'station': station_pressure,
+                'station': round(station_pressure, 2),
                 'forecast': forecast_pressure,
                 'difference': round(station_pressure - forecast_pressure, 1),
                 'difference_percent': round(((station_pressure - forecast_pressure) / forecast_pressure) * 100,
