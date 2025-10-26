@@ -83,7 +83,7 @@ def receive_data():
 @app.route('/api/data', methods=['GET'])
 def get_data():
     data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(20))
-    print("Fetched data:", data)
+    #print("Fetched data:", data)
     return jsonify(data)
 
 @app.route('/api/data/all', methods=['GET'])
@@ -277,11 +277,15 @@ def get_weather_forecast():
         return jsonify({"error": "OpenWeatherMap API key not configured"}), 500
 
     try:
+        # Get location from config or use defaults
+        config_data = config.find_one({}, {'_id': 0})
+        location = config_data.get('location', {}) if config_data else {}
+        
         # Get current weather data
         url = f"https://api.openweathermap.org/data/2.5/weather"
         params = {
-            'lat': WEATHER_LOCATION_LAT,
-            'lon': WEATHER_LOCATION_LON,
+            'lat': location.get('latitude', WEATHER_LOCATION_LAT),
+            'lon': location.get('longitude', WEATHER_LOCATION_LON),
             'appid': OPENWEATHER_API_KEY,
             'units': 'metric'
         }
@@ -290,6 +294,7 @@ def get_weather_forecast():
         response.raise_for_status()
 
         data = response.json()
+        print("Weather API response:", data)
 
         # Extract relevant weather data
         forecast_data = {
