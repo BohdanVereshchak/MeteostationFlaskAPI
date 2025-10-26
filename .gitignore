@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environment
+venv/
+.env/
+
+# VS Code
+.vscode/
+
+# Mac / Linux
+*.swp
+*.DS_Store
+*.egg-info/
+
+# Logs
+*.log
+
+# Database files (if any local db)
+*.db
+
+# Flask secret key files or config overrides (optional)
+config/config_db.py
