@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Головна{% endblock %}
+{% block content %}
+    <h2 class="mb-4">Поточна погода</h2>
+    <div id="weather" class="card p-4 shadow-sm mb-4">Завантаження...</div>
+    
+    <h2 class="mb-4">Опади</h2>
+    <div class="card p-4 shadow-sm">
+        <div class="row">
+            <div class="col-md-6">
+                <div id="rainfallChartContainer">
+                    <canvas id="rainfallChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="list-group">
+                    <button class="list-group-item list-group-item-action">Останні 24 години</button>
+                    <button class="list-group-item list-group-item-action">Останні 12 годин</button>
+                    <button class="list-group-item list-group-item-action">Останні 6 годин</button>
+                    <button class="list-group-item list-group-item-action">Останні 3 години</button>
+                </div>
+                <div id="rainfallInfo" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load Chart.js library only if not already loaded
+        if (typeof Chart === 'undefined') {
+            const chartScript = document.createElement('script');
+            chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            chartScript.onload = initRainfallChart;
+            document.head.appendChild(chartScript);
+        } else {
+            initRainfallChart();
+        }
+
+        let rainfallChart = null;
+
+        function initRainfallChart() {
+            const canvas = document.getElementById('rainfallChart');
+            if (!canvas) {
+                console.error('Canvas element not found');
+                return;
+            }
+            
+            // Check if Chart is available
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js not loaded');
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            rainfallChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Опади за годину (мм)',
+                        data: [],
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Міліметри (мм)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Час'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Load default data (last 24 hours)
+            loadHourlyRainfallData(6);
+        }
+
+        function loadHourlyRainfallData(hours) {
+            fetch(`/api/data/hourly_rainfall?hours=${hours}`)
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data || !data.data || !Array.isArray(data.data)) {
+                        throw new Error('Invalid data received from server');
+                    }
+
+                    // Update chart if it exists and is initialized
+                    if (rainfallChart && typeof rainfallChart.update === 'function') {
+                        // Extract time labels and rainfall values
+                        const labels = data.data.map(item => item.time_label);
+                        const rainfallData = data.data.map(item => item.rainfall_mm);
+                        
+                        rainfallChart.data.labels = labels;
+                        rainfallChart.data.datasets[0].data = rainfallData;
+                        rainfallChart.update();
+                    }
+
+                    // Calculate total rainfall
+                    const totalRainfall = data.data.reduce((sum, item) => sum + item.rainfall_mm, 0);
+                    
+                    // Update info text
+                    let infoText = `
+                        <h4>Опади за останні ${hours} годин</h4>
+                        <p>Загальна кількість опадів: <strong>${totalRainfall.toFixed(2)} мм</strong></p>
+                        <p>Середньогодинні опади: <strong>${(totalRainfall/hours).toFixed(2)} мм/год</strong></p>
+                    `;
+                    
+                    const rainfallInfo = document.getElementById('rainfallInfo');
+                    if (rainfallInfo) {
+                        rainfallInfo.innerHTML = infoText;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading rainfall data:', error);
+                    const rainfallInfo = document.getElementById('rainfallInfo');
+                    if (rainfallInfo) {
+                        rainfallInfo.innerHTML = 
+                            '<div class="alert alert-danger">Помилка завантаження даних про опади: ' + 
+                            error.message + '</div>';
+                    }
+                });
+        }
+
+        // Update buttons to use hourly data
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('.list-group-item');
+            buttons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const hours = parseInt(this.textContent.match(/\d+/)[0]);
+                    loadHourlyRainfallData(hours);
+                });
+            });
+        });
+
+        
+        let appConfig = {
+            temperature: { min: 5, max: 35 },
+            humidity: { min: 0, max: 100 }
+        };
+
+        function loadConfig() {
+            return fetch('/api/config')
+                .then(res => res.json())
+                .then(config => {
+                    if (config.temperature) {
+                        appConfig.temperature = {
+                            min: config.temperature.min || 5,
+                            max: config.temperature.max || 35
+                        };
+                    }
+                    if (config.humidity) {
+                        appConfig.humidity = {
+                            min: config.humidity.min || 0,
+                            max: config.humidity.max || 100
+                        };
+                    }
+                    return appConfig;
+                })
+                .catch(() => {
+                    console.log('Using default config');
+                    return appConfig;
+                });
+        }
+
+        appConfig = loadConfig();
+
+        fetch("/api/data")
+        .then(res => res.json())
+        .then(data => {
+            if (!data.length) {
+                document.getElementById("weather").innerHTML = "<p>Немає даних</p>";
+                return;
+            }
+
+            const env = data[0].environment;
+            const rain = data[0].rainfall;
+            const air_quality = data[0].air_quality;
+
+            const getColorLevels = (value, thresholds) => {
+                let levels = [false, false, false, false, false];
+
+                if (value < thresholds[0]) {
+                    return levels;
+                }
+
+                if (thresholds.length === 2) {
+                    const step = (thresholds[1] - thresholds[0]) / 5;
+                    if (value < thresholds[0] + step) {
+                        levels[0] = true;
+                    } else if (value < thresholds[0] + 2*step) {
+                        levels[0] = levels[1] = true;
+                    } else if (value < thresholds[0] + 3*step) {
+                        levels[0] = levels[1] = levels[2] = true;
+                    } else if (value < thresholds[0] + 4*step) {
+                        levels[0] = levels[1] = levels[2] = levels[3] = true;
+                    } else {
+                        levels.fill(true);
+                    }
+                }
+                else if (thresholds.length === 5) {
+                    if (value < thresholds[1]) {
+                        levels[0] = true;
+                    } else if (value < thresholds[2]) {
+                        levels[0] = levels[1] = true;
+                    } else if (value < thresholds[3]) {
+                        levels[0] = levels[1] = levels[2] = true;
+                    } else if (value < thresholds[4]) {
+                        levels[0] = levels[1] = levels[2] = levels[3] = true;
+                    } else {
+                        levels.fill(true);
+                    }
+                }
+
+                return levels;
+            };
+
+            const renderBars = (levels) => {
+                return `
+                    <div class="d-inline-block ms-2">
+                        <span class="indicator ${levels[0] ? 'blue' : ''}"></span>
+                        <span class="indicator ${levels[1] ? 'lightblue' : ''}"></span>
+                        <span class="indicator ${levels[2] ? 'green' : ''}"></span>
+                        <span class="indicator ${levels[3] ? 'yellow' : ''}"></span>
+                        <span class="indicator ${levels[4] ? 'red' : ''}"></span>
+                    </div>
+                `;
+            };
+
+            const html = `
+                <h4>Дані станом на ${(() => {
+                    const date = new Date(data[0].timestamp);
+                    date.setHours(date.getHours() + 3); // Додаємо 3 години
+                    return date.toLocaleString('uk-UA', {
+                        hour12: false,
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }).replace(',', ' о');
+                })()}</h4>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        Температура: ${env.temperature} °C
+                        ${renderBars(getColorLevels(env.temperature, [appConfig.temperature.min, appConfig.temperature.max]))}
+                    </li>
+                    <li class="list-group-item">
+                        Тиск: ${env.pressure} гПа
+                        ${renderBars(getColorLevels(env.pressure, [900, 1100]))}
+                    </li>
+                    <li class="list-group-item">
+                        Вологість: ${env.humidity} %
+                        ${renderBars(getColorLevels(env.humidity, [appConfig.humidity.min, appConfig.humidity.max]))}
+                    </li>
+                    <li class="list-group-item">
+                        VOC: ${air_quality.aqi}
+                        ${renderBars(getColorLevels(air_quality.aqi, [1, 2, 3, 4, 5]))}
+                    </li>
+                    <li class="list-group-item">
+                        CO₂: ${air_quality.eco2}
+                        ${renderBars(getColorLevels(air_quality.eco2, [400, 600, 800, 1000, 1500]))}
+                    </li>
+                    <li class="list-group-item">
+                        VOC: ${air_quality.tvoc}
+                        ${renderBars(getColorLevels(air_quality.tvoc, [65, 220, 660, 2200, 5500]))}
+                    </li>
+                </ul>
+            `;
+
+            document.getElementById("weather").innerHTML = html;
+        });
+    </script>
+
+    <style>
+        .indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            margin-right: 3px;
+            border-radius: 2px;
+            background-color: #e0e0e0;
+        }
+        .blue { background-color: #2196F3; }
+        .lightblue { background-color: #64B5F6; }
+        .green { background-color: #4CAF50; }
+        .yellow { background-color: #FFEB3B; }
+        .red { background-color: #F44336; }
+    </style>
+{% endblock %}

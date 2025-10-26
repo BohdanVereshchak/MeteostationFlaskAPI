@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Порівняння{% endblock %}
+{% block content %}
+    <h2 class="mb-4">Порівняння даних метеостанції з прогнозом</h2>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Контроль</h5>
+                    <button id="refreshBtn" class="btn btn-primary">Оновити дані</button>
+                    <div id="lastUpdate" class="text-muted mt-2">Останнє оновлення: завантаження...</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Статус</h5>
+                    <div id="connectionStatus" class="badge bg-secondary">Підключення...</div>
+                    <div id="locationInfo" class="text-muted mt-2">Локація: завантаження...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h4 class="card-title mb-4">Таблиця порівняння</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Метеостанція</th>
+                            <th>Прогноз</th>
+                            <th>Відхилення</th>
+                            <th>Відхилення (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparisonTable">
+                        <tr>
+                            <td colspan="5" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Завантаження...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Інформація про прогноз</h5>
+                    <div id="forecastInfo">
+                        <div class="text-muted">Завантаження інформації про прогноз...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Статистика відхилень</h5>
+                    <div id="deviationStats">
+                        <div class="text-muted">Розрахунок статистики...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let comparisonData = null;
+
+        function formatDifference(value, isPercentage = false) {
+            const absValue = Math.abs(value);
+            const sign = value > 0 ? '+' : '';
+            const unit = isPercentage ? '%' : '';
+
+            let className = 'diff-neutral';
+            if (value > 0) {
+                className = 'diff-positive';
+            } else if (value < 0) {
+                className = 'diff-negative';
+            }
+
+            return `<span class="${className}">${sign}${value}${unit}</span>`;
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            date.setHours(date.getHours() + 3); // UTC+3
+            return date.toLocaleString('uk-UA', {
+                hour12: false,
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).replace(',', ' о');
+        }
+
+        function loadComparisonData() {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.textContent = 'Завантаження...';
+            statusElement.className = 'badge bg-warning';
+
+            fetch('/api/weather/comparison')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    comparisonData = data;
+                    updateComparisonTable(data);
+                    updateStatusAndInfo(data);
+                    updateLastUpdateTime();
+
+                    statusElement.textContent = 'Підключено';
+                    statusElement.className = 'badge bg-success';
+                })
+                .catch(error => {
+                    console.error('Error loading comparison data:', error);
+
+                    statusElement.textContent = 'Помилка';
+                    statusElement.className = 'badge bg-danger';
+
+                    document.getElementById('comparisonTable').innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center text-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Помилка завантаження даних: ${error.message}
+                            </td>
+                        </tr>
+                    `;
+                });
+        }
+
+        function updateComparisonTable(data) {
+            const tableBody = document.getElementById('comparisonTable');
+
+            const rows = [
+                {
+                    parameter: 'Температура',
+                    unit: '°C',
+                    data: data.temperature
+                },
+                {
+                    parameter: 'Вологість',
+                    unit: '%',
+                    data: data.humidity
+                },
+                {
+                    parameter: 'Тиск',
+                    unit: 'гПа',
+                    data: data.pressure
+                }
+            ];
+
+            const html = rows.map(row => `
+                <tr>
+                    <td><strong>${row.parameter}</strong></td>
+                    <td>${row.data.station} ${row.unit}</td>
+                    <td>${row.data.forecast} ${row.unit}</td>
+                    <td>${formatDifference(row.data.difference)} ${row.unit}</td>
+                    <td>${formatDifference(row.data.difference_percent, true)}</td>
+                </tr>
+            `).join('');
+
+            tableBody.innerHTML = html;
+        }
+
+        function updateStatusAndInfo(data) {
+            // Update location info
+            document.getElementById('locationInfo').textContent = `Локація: ${data.location}`;
+
+            // Update forecast info
+            const forecastInfo = document.getElementById('forecastInfo');
+            forecastInfo.innerHTML = `
+                <p><strong>Опис погоди:</strong> ${data.forecast_description}</p>
+                <p><strong>Час вимірювання станції:</strong> ${formatTimestamp(data.timestamp)}</p>
+            `;
+
+            // Update deviation statistics
+            const deviationStats = document.getElementById('deviationStats');
+            const tempDev = Math.abs(data.temperature.difference);
+            const humDev = Math.abs(data.humidity.difference);
+            const pressDev = Math.abs(data.pressure.difference);
+            const avgDev = ((tempDev / data.temperature.forecast * 100) +
+                           (humDev / data.humidity.forecast * 100) +
+                           (pressDev / data.pressure.forecast * 100)) / 3;
+
+            deviationStats.innerHTML = `
+                <p><strong>Середнє відхилення:</strong> ${avgDev.toFixed(1)}%</p>
+                <p><strong>Найбільше відхилення:</strong>
+                    ${Math.max(Math.abs(data.temperature.difference_percent),
+                              Math.abs(data.humidity.difference_percent),
+                              Math.abs(data.pressure.difference_percent)).toFixed(1)}%</p>
+                <p><strong>Точність прогнозу:</strong> ${(100 - avgDev).toFixed(1)}%</p>
+            `;
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('uk-UA', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastUpdate').textContent = `Останнє оновлення: ${timeString}`;
+        }
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', loadComparisonData);
+
+        // Auto-refresh every 5 minutes
+        setInterval(loadComparisonData, 300000);
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', loadComparisonData);
+    </script>
+
+    <style>
+        .diff-positive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .diff-negative {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .diff-neutral {
+            color: #6c757d;
+        }
+        .table th {
+            border-top: none;
+        }
+        .card {
+            border: none;
+            border-radius: 0.5rem;
+        }
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+    </style>
+{% endblock %}

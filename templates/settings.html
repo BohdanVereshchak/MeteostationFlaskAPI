@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Налаштування{% endblock %}
+{% block content %}
+<h2 class="mb-4">Налаштування станції</h2>
+<div class="card p-4 shadow-sm">
+    <form id="configForm">
+        <div class="mb-3">
+            <label for="update_interval" class="form-label">Інтервал вимірювань (секунди)</label>
+            <input type="number" class="form-control" id="update_interval" name="update_interval" required min="1">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Температура (°C)</label>
+            <div class="row">
+                <div class="col">
+                    <input type="number" class="form-control" id="temp_min" name="temp_min" placeholder="Мін.">
+                </div>
+                <div class="col">
+                    <input type="number" class="form-control" id="temp_max" name="temp_max" placeholder="Макс.">
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Вологість (%)</label>
+            <div class="row">
+                <div class="col">
+                    <input type="number" class="form-control" id="hum_min" name="hum_min" placeholder="Мін." min="0" max="100">
+                </div>
+                <div class="col">
+                    <input type="number" class="form-control" id="hum_max" name="hum_max" placeholder="Макс." min="0" max="100">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Зберегти</button>
+    </form>
+</div>
+
+<script>
+    // Завантаження конфігурації
+    fetch('/api/config')
+        .then(res => res.json())
+        .then(config => {
+            const intervalMs = config.system?.update_interval_ms || 300000;
+            document.getElementById('update_interval').value = intervalMs / 1000;
+
+            document.getElementById('temp_min').value = config.temperature?.min ?? '';
+            document.getElementById('temp_max').value = config.temperature?.max ?? '';
+            document.getElementById('hum_min').value = config.humidity?.min ?? '';
+            document.getElementById('hum_max').value = config.humidity?.max ?? '';
+        });
+
+    document.getElementById('configForm').onsubmit = async (e) => {
+        e.preventDefault();
+
+        const updateIntervalSec = parseInt(document.getElementById('update_interval').value);
+
+        const data = {
+            system: {
+                update_interval_ms: updateIntervalSec * 1000
+            },
+            temperature: {
+                min: parseFloat(document.getElementById('temp_min').value) || null,
+                max: parseFloat(document.getElementById('temp_max').value) || null
+            },
+            humidity: {
+                min: parseFloat(document.getElementById('hum_min').value) || null,
+                max: parseFloat(document.getElementById('hum_max').value) || null
+            }
+        };
+
+        try {
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                alert('Налаштування збережено');
+            } else {
+                alert('Помилка збереження');
+            }
+        } catch (err) {
+            alert('Помилка збереження');
+        }
+    };
+</script>
+{% endblock %}

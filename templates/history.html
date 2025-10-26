@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Історія{% endblock %}
+{% block content %}
+    <h2 class="mb-4">Історія вимірювань</h2>
+
+    <div class="card p-4 mb-4 shadow-sm">
+        <h4>Статистика</h4>
+        <select id="statsDays" class="form-select mb-3">
+            <option value="1">За 1 день</option>
+            <option value="7">За 7 днів</option>
+            <option value="30">За 30 днів</option>
+        </select>
+        <div id="stats">Завантаження...</div>
+    </div>
+
+    <div class="card p-4 shadow-sm">
+        <h4>Останні вимірювання</h4>
+        <div id="history" class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Час</th>
+                        <th>Температура</th>
+                        <th>Вологість</th>
+                        <th>Тиск</th>
+                        <th>VOC</th>
+                        <th>CO₂</th>
+                        <th>Опади</th>
+                    </tr>
+                </thead>
+                <tbody id="historyData">
+                    <tr><td colspan="5">Завантаження...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function loadStats(days) {
+            fetch(`/api/data/stats?days=${days}`)
+                .then(res => res.json())
+                .then(stats => {
+                    const html = `
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Середня температура: ${stats.avg_temp?.toFixed(1) || 'N/A'} °C</li>
+                            <li class="list-group-item">Мінімальна температура: ${stats.min_temp?.toFixed(1) || 'N/A'} °C</li>
+                            <li class="list-group-item">Максимальна температура: ${stats.max_temp?.toFixed(1) || 'N/A'} °C</li>
+                            <li class="list-group-item">Опади: ${stats.rainfall_mm ?? 'N/A'} мм/м²</li>
+                        </ul>`;
+                    document.getElementById('stats').innerHTML = html;
+                });
+        }
+
+
+        function loadHistory() {
+            fetch('/api/data')
+                .then(res => res.json())
+                .then(data => {
+                    const rows = data.map(item => `
+                        <tr>
+                            <td>${
+                            (() => {
+                                const date = new Date(item.timestamp);
+                                date.setHours(date.getHours() + 3);
+                                return date.toLocaleString('uk-UA', {
+                                timeZone: 'Europe/Kiev',
+                                hour12: false,
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                                });
+                            })()
+                            }</td>
+                            <td>${item.environment.temperature} °C</td>
+                            <td>${item.environment.humidity} %</td>
+                            <td>${item.environment.pressure} гПа</td>
+                            <td>${item.air_quality.tvoc} Ppb</td>
+                            <td>${item.air_quality.eco2} ppm CO2</td>
+                            <td>${item.rainfall.tips * 0.987.toFixed(4)} мм/м2</td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';
+                });
+        }
+
+        document.getElementById('statsDays').onchange = (e) => {
+            loadStats(e.target.value);
+        };
+
+        // Initial load
+        loadStats(1);
+        loadHistory();
+    </script>
+{% endblock %}
