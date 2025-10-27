@@ -24,6 +24,7 @@
                         <th>Вологість</th>
                         <th>Тиск</th>
                         <th>VOC</th>
+                        <th>AQI</th>
                         <th>CO₂</th>
                         <th>Опади</th>
                     </tr>
@@ -42,9 +43,9 @@
                 .then(stats => {
                     const html = `
                         <ul class="list-group list-group-flush">
-                            <li class="list-group-item">Середня температура: ${stats.avg_temp?.toFixed(1) || 'N/A'} °C</li>
-                            <li class="list-group-item">Мінімальна температура: ${stats.min_temp?.toFixed(1) || 'N/A'} °C</li>
-                            <li class="list-group-item">Максимальна температура: ${stats.max_temp?.toFixed(1) || 'N/A'} °C</li>
+                            <li class="list-group-item">Середня температура: ${stats.avg_temp?.toFixed(2) || 'N/A'} °C</li>
+                            <li class="list-group-item">Мінімальна температура: ${stats.min_temp?.toFixed(2) || 'N/A'} °C</li>
+                            <li class="list-group-item">Максимальна температура: ${stats.max_temp?.toFixed(2) || 'N/A'} °C</li>
                             <li class="list-group-item">Опади: ${stats.rainfall_mm ?? 'N/A'} мм/м²</li>
                         </ul>`;
                     document.getElementById('stats').innerHTML = html;
@@ -60,26 +61,42 @@
                         <tr>
                             <td>${
                             (() => {
-                                const date = new Date(item.timestamp);
+                                const timestamp = item.timestamp;
+                                let date;
+                                if (timestamp.includes('T')) {
+                                    date = new Date(timestamp);
+                                } else {
+                                    const [datePart, timePart] = timestamp.split(' ');
+                                    const [year, month, day] = datePart.split('-');
+                                    const [hour, minute, second] = timePart ? timePart.split(':') : [0, 0, 0];
+                                    date = new Date(year, month - 1, day, hour, minute, second);
+                                }
+                                
                                 date.setHours(date.getHours() + 3);
-                                return date.toLocaleString('uk-UA', {
-                                timeZone: 'Europe/Kiev',
-                                hour12: false,
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                                });
+                                
+                                try {
+                                    return date.toLocaleString('uk-UA', {
+                                        hour12: false,
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        second: '2-digit'
+                                    });
+                                } catch (e) {
+                                    const pad = (num) => String(num).padStart(2, '0');
+                                    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+                                }
                             })()
                             }</td>
-                            <td>${item.environment.temperature} °C</td>
-                            <td>${item.environment.humidity} %</td>
-                            <td>${item.environment.pressure} гПа</td>
+                            <td>${item.environment.temperature.toFixed(2)} °C</td>
+                            <td>${item.environment.humidity.toFixed(2)} %</td>
+                            <td>${item.environment.pressure.toFixed(2)} гПа</td>
                             <td>${item.air_quality.tvoc} Ppb</td>
-                            <td>${item.air_quality.eco2} ppm CO2</td>
-                            <td>${item.rainfall.tips * 0.987.toFixed(4)} мм/м2</td>
+                            <td>${item.air_quality.aqi}</td>
+                            <td>${item.air_quality.eco2} ppm</td>
+                            <td>${(item.rainfall.tips * 0.987).toFixed(2)} мм/м2</td>
                         </tr>
                     `).join('');
                     document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';
