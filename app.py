@@ -1,34 +1,82 @@
-from flask import Flask, request, jsonify, make_response, redirect, url_for
-from flask_socketio import SocketIO, emit
-
-import urllib.parse
+from flask import Flask, request, jsonify, make_response, render_template
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
-from config.config_db import *
 from datetime import datetime, timezone, timedelta
-import time
-from flask import render_template
-
+import certifi
 import requests
+import json
+import hmac
+import hashlib
+import logging
+from config.config_db import *
+from functools import wraps
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")  # Ініціалізація
 
-CORS(app, origins=["*"], allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
+CORS(app, origins=["*"], allow_headers=["Content-Type", "Authorization", "X-Signature"], methods=["GET", "POST", "OPTIONS"])
 
 # Підключення до MongoDB
-client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
+client = MongoClient(
+    MONGO_URI,
+    server_api=ServerApi('1'),
+    tls=True,
+    tlsAllowInvalidCertificates=False,
+    tlsCAFile=certifi.where(),
+    serverSelectionTimeoutMS=10000
+)   
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
 
-weather_station_data = []
+logging.basicConfig(level=logging.INFO)
 
-# @app.route('/')
-# def hello_world():
-#     # for web
-#     return 'Hello, World!'
+def verify_hmac_signature(raw_bytes: bytes, received_signature: str) -> bool:
+    """
+    Обчислити HMAC SHA256 по сирому payload і порівняти з отриманою сигнатурою.
+    received_signature - hex string ("abcd1234...")
+    """
+    computed = hmac.new(SECRET_KEY, raw_bytes, hashlib.sha256).hexdigest()
+    # Використовуємо secure compare
+    return hmac.compare_digest(computed, received_signature)
+
+def require_token(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.headers.get("Authorization", "")
+        if token not in AUTHORIZED_TOKENS:
+            return jsonify({"error": "Unauthorized - invalid token"}), 401
+        # attach device id or user info if потрібно
+        request.device_id = AUTHORIZED_TOKENS[token]
+        return f(*args, **kwargs)
+    return wrapper
+
+def validate_environment(env: dict, config_data: dict):
+    alerts = []
+    # перевірка типів і значень
+    if 'temperature' in env:
+        try:
+            temp = float(env['temperature'])
+            tmin = config_data.get('temperature', {}).get('min')
+            tmax = config_data.get('temperature', {}).get('max')
+            if tmin is not None and temp < tmin:
+                alerts.append(f"⚠️ Температура нижче мінімуму: {temp:.2f} < {tmin}")
+            if tmax is not None and temp > tmax:
+                alerts.append(f"⚠️ Температура вище максимуму: {temp:.2f} > {tmax}")
+        except Exception:
+            alerts.append("⚠️ Некоректне значення temperature")
+    if 'humidity' in env:
+        try:
+            humidity = float(env['humidity'])
+            hmin = config_data.get('humidity', {}).get('min')
+            hmax = config_data.get('humidity', {}).get('max')
+            if hmin is not None and humidity < hmin:
+                alerts.append(f"⚠️ Вологість нижче мінімуму: {humidity:.2f} < {hmin}")
+            if hmax is not None and humidity > hmax:
+                alerts.append(f"⚠️ Вологість вище максимуму: {humidity:.2f} > {hmax}")
+        except Exception:
+            alerts.append("⚠️ Некоректне значення humidity")
+    return alerts
 
 @app.route('/')
 def main_page():
@@ -37,43 +85,41 @@ def main_page():
 
 @app.route('/api/data', methods=['POST'])
 def receive_data():
-    data = request.json
+    token = request.headers.get("Authorization", "")
+    if token not in AUTHORIZED_TOKENS:
+        return jsonify({"error": "Unauthorized - invalid token"}), 401
+    
+    received_sig = request.headers.get("X-Signature", "")
+    if not received_sig:
+        return jsonify({"error": "Missing signature"}), 401
+
+    raw = request.get_data()  # bytes
+    if not verify_hmac_signature(raw, received_sig):
+        return jsonify({"error": "Invalid signature"}), 401
+
+    try:
+        data = json.loads(raw.decode('utf-8'))
+    except Exception as e:
+        app.logger.error(f"JSON parse error: {str(e)}")
+        return jsonify({"error": "Bad JSON"}), 400
+
+    data['device_id'] = AUTHORIZED_TOKENS[token]
 
     # Отримуємо поточну конфігурацію
-    config_data = config.find_one({}, {'_id': 0})
-
-    # Перевіряємо межі значень
+    config_data = config.find_one({}, {'_id': 0}) or {}
     alerts = []
 
-    if 'environment' in data:
-        env = data['environment']
-
-        # Перевірка температури
-        if 'temperature' in env and 'temperature' in config_data:
-            temp = env['temperature']
-            temp_config = config_data['temperature']
-
-            if temp_config.get('min') is not None and temp < temp_config['min']:
-                alerts.append(f"⚠️ Температура нижче мінімуму: {temp:.2f} < {temp_config['min']}")
-            if temp_config.get('max') is not None and temp > temp_config['max']:
-                alerts.append(f"⚠️ Температура вище максимуму: {temp:.2f} > {temp_config['max']}")
-
-        # Перевірка вологості
-        if 'humidity' in env and 'humidity' in config_data:
-            humidity = env['humidity']
-            humidity_config = config_data['humidity']
-
-            if humidity_config.get('min') is not None and humidity < humidity_config['min']:
-                alerts.append(f"⚠️ Вологість нижче мінімуму: {humidity:.2f} < {humidity_config['min']}")
-            if humidity_config.get('max') is not None and humidity > humidity_config['max']:
-                alerts.append(f"⚠️ Вологість вище максимуму: {humidity:.2f} > {humidity_config['max']}")
+    if 'environment' in data and isinstance(data['environment'], dict):
+        alerts = validate_environment(data['environment'], config_data)
 
     # Зберігаємо дані
-    collection.insert_one(data)
-
-    if alerts:
-        for a in alerts:
-            socketio.emit('alert', {'message': a})
+    try:
+        if 'timestamp' not in data:
+            data['timestamp'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        collection.insert_one(data)
+    except Exception as e:
+        app.logger.error(f"DB insert error: {str(e)}")
+        return jsonify({"error": "DB error"}), 500
 
     return jsonify({
         "status": "success",
@@ -83,7 +129,6 @@ def receive_data():
 @app.route('/api/data', methods=['GET'])
 def get_data():
     data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(20))
-    #print("Fetched data:", data)
     return jsonify(data)
 
 @app.route('/api/data/all', methods=['GET'])
@@ -393,6 +438,6 @@ def comparison_page():
     return render_template("comparison.html")
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=3000, debug=True, allow_unsafe_werkzeug=True)
+    app.run(host='0.0.0.0', port=3000, debug=True, ssl_context=('cert.pem', 'key.pem'))
 
 

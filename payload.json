@@ -1,0 +1,19 @@
+{
+    "air_quality": {
+      "aqi": 1,
+      "eco2": 431,
+      "tvoc": 38
+    },
+    "environment": {
+      "humidity": 42.8440093994141,
+      "pressure": 981.620483398438,
+      "temperature": 22.0499992370605
+    },
+    "rainfall": {
+      "tips": 71
+    },
+    "system": {
+      "update_interval_ms": 60000
+    },
+    "timestamp": "2025-10-27 21:40:54"
+}
