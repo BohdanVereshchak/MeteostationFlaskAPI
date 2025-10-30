@@ -3,6 +3,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 import certifi
 import requests
 import json
@@ -11,6 +12,8 @@ import hashlib
 import logging
 from config.config_db import *
 from functools import wraps
+
+ROUND_HOURLY_RAINFALL_TIME = True
 
 app = Flask(__name__)
 
@@ -78,6 +81,40 @@ def validate_environment(env: dict, config_data: dict):
             alerts.append("⚠️ Некоректне значення humidity")
     return alerts
 
+# Helper: get cumulative rain "tips" value at or before given ISO timestamp (returns (tips, timestamp))
+def get_latest_tips_before_or_equal(ts_iso: str):
+    """
+    Return (tips_value, record_timestamp) for the latest record with timestamp <= ts_iso.
+    If none found, return (0, None).
+    
+    This function handles two timestamp formats stored as strings:
+    1. Correct ISO format: "2025-10-30T22:00:00+00:00"
+    2. Legacy 'space' format: "2025-10-30 22:00:00"
+    """
+    
+    rec = None
+    try:
+        dt_obj = datetime.fromisoformat(ts_iso)
+        legacy_ts_str = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+        rec = collection.find_one(
+            {"timestamp": {"$not": {"$regex": "T"}, "$lte": legacy_ts_str}},
+            sort=[("timestamp", -1)]
+        )
+
+        if not rec:
+            return 0, None
+        
+        tips = rec.get("rainfall", {}).get("tips", 0)
+        try:
+            tips = float(tips)
+        except Exception:
+            tips = 0
+        return tips, rec.get("timestamp")
+    
+    except Exception as e:
+        app.logger.error(f"FATAL ERROR in get_latest_tips_before_or_equal: {e}")
+        return 0, None
+
 @app.route('/')
 def main_page():
     return render_template("index.html")
@@ -115,7 +152,8 @@ def receive_data():
     # Зберігаємо дані
     try:
         if 'timestamp' not in data:
-            data['timestamp'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            # store as ISO 8601 with timezone (UTC) so clients and queries are unambiguous
+            data['timestamp'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         collection.insert_one(data)
     except Exception as e:
         app.logger.error(f"DB insert error: {str(e)}")
@@ -151,9 +189,9 @@ def get_stats():
     except ValueError:
         return jsonify({"error": "Invalid 'days' parameter"}), 400
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     past = now - timedelta(days=days)
-    past_str = past.strftime("%Y-%m-%d %H:%M:%S")
+    past_str = past.replace(microsecond=0).isoformat()
 
     # Найближчий до часу `past_str`, але не пізніше (≤)
     first = collection.find_one(
@@ -162,7 +200,7 @@ def get_stats():
     )
 
     # Найновіший запис (використаємо поточний час як максимум)
-    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now.replace(microsecond=0).isoformat()
     last = collection.find_one(
         {"timestamp": {"$lte": now_str}},
         sort=[("timestamp", -1)]
@@ -200,79 +238,65 @@ def get_rainfall():
     except ValueError:
         return jsonify({"error": "Invalid 'interval' parameter"}), 400
 
-    now = datetime.now()
-    past = now - timedelta(hours=interval_hours)
-    past_str = past.strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    past = (now - timedelta(hours=interval_hours)).replace(microsecond=0)
 
-    # Find the closest record to the past time (<=)
-    first = collection.find_one(
-        {"timestamp": {"$lte": past_str}},
-        sort=[("timestamp", -1)]
-    )
+    past_str = past.isoformat()
+    now_str = now.isoformat()
 
-    # Find the most recent record (<= now)
-    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
-    last = collection.find_one(
-        {"timestamp": {"$lte": now_str}},
-        sort=[("timestamp", -1)]
-    )
+    # Get cumulative tips at or before past and now (fallback to 0)
+    t1, t1_ts = get_latest_tips_before_or_equal(past_str)
+    t2, t2_ts = get_latest_tips_before_or_equal(now_str)
 
-    rainfall_mm = 0
-    if first and last:
-        t1 = first.get("rainfall", {}).get("tips", 0)
-        t2 = last.get("rainfall", {}).get("tips", 0)
-        rainfall_mm = round((t2 - t1) * 0.987, 2)
+    # Convert tips difference to mm (sensor factor 0.987) and clamp to >= 0
+    rainfall_mm = round(max(0.0, (t2 - t1) * 0.987), 2)
 
     return jsonify({
         "interval_hours": interval_hours,
         "rainfall_mm": rainfall_mm,
-        "start_time": first["timestamp"] if first else None,
-        "end_time": last["timestamp"] if last else None
+        "start_time": t1_ts,
+        "end_time": t2_ts
     }), 200
 
 @app.route('/api/data/hourly_rainfall', methods=['GET'])
 def get_hourly_rainfall():
     try:
-        # Кількість годин для аналізу (за замовчуванням 24)
-        hours = int(request.args.get('hours', 6))
+        # Кількість годин для аналізу (за замовчуванням 3)
+        hours = int(request.args.get('hours', 3))
         if hours < 1:
             return jsonify({"error": "Hours must be >= 1"}), 400
     except ValueError:
         return jsonify({"error": "Invalid 'hours' parameter"}), 400
 
-    now = datetime.now(tz=timezone.utc)
-    now = now.astimezone(timezone(timedelta(hours=3)))  # Перетворення на український час (UTC+3)
+    now_utc = datetime.now(timezone.utc).replace(microsecond=0)
+    if ROUND_HOURLY_RAINFALL_TIME:
+        # ВАРІАНТ 1 (True): Заокруглюємо час ДО НАСТУПНОЇ ГОДИНИ
+        if now_utc.minute > 0 or now_utc.second > 0:
+            now_utc = (now_utc + timedelta(hours=1)).replace(minute=0, second=0)
+        else:
+            now_utc = now_utc
+
     data_points = []
-    offset = timedelta(hours=3)  # Український час (UTC+3)
     for i in range(hours, 0, -1):
-        end_time = now - timedelta(hours=i-1)-timedelta(hours=3)
-        start_time = now - timedelta(hours=i)-timedelta(hours=3)
+        end_time_utc = now_utc - timedelta(hours=i-1)
+        start_time_utc = now_utc - timedelta(hours=i)
 
-        end_with_offset = end_time + offset
+        start_str = start_time_utc.isoformat()
+        end_str = end_time_utc.isoformat()
 
-        start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-        end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        # cumulative tips at or before start and end
+        t_start, ts_start = get_latest_tips_before_or_equal(start_str)
+        t_end, ts_end = get_latest_tips_before_or_equal(end_str)
 
-        # Знаходимо найближчі записи до початку та кінця годинного інтервалу
-        start_record = collection.find_one(
-            {"timestamp": {"$lte": start_str}},
-            sort=[("timestamp", -1)]
-        )
-        end_record = collection.find_one(
-            {"timestamp": {"$lte": end_str}},
-            sort=[("timestamp", -1)]
-        )
+        rainfall_mm = round(max(0.0, (t_end - t_start) * 0.987), 2)
 
-        rainfall_mm = 0
-        if start_record and end_record:
-            t1 = start_record.get("rainfall", {}).get("tips", 0)
-            t2 = end_record.get("rainfall", {}).get("tips", 0)
-            rainfall_mm = round((t2 - t1) * 0.987, 2)
-
+        kyiv_label_time = end_time_utc.astimezone(ZoneInfo("Europe/Kyiv"))
         data_points.append({
-            "hour": end_with_offset.hour,
+            "hour": kyiv_label_time.hour,
             "rainfall_mm": rainfall_mm,
-            "time_label": end_with_offset.strftime("%H:%M")
+            "time_label": kyiv_label_time.strftime("%H:%M"),
+            "start_ts": ts_start,
+            "end_ts": ts_end
         })
 
     return jsonify({
@@ -299,11 +323,11 @@ def update_config():
 @app.route("/time", methods=["GET"])
 def get_time():
     try:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         response = {
-            "unix_time": int(now.timestamp()),
-            "iso_datetime": now.isoformat(timespec='seconds'),
-            "timezone": "UTC"
+             "unix_time": int(now.timestamp()),
+             "iso_datetime": now.replace(microsecond=0).isoformat(),
+             "timezone": "UTC"
         }
         resp = make_response(jsonify(response), 200)
         resp.headers['Content-Type'] = 'application/json'
@@ -343,13 +367,13 @@ def get_weather_forecast():
 
         # Extract relevant weather data
         forecast_data = {
-            'temperature': data['main']['temp'],
-            'humidity': data['main']['humidity'],
-            'pressure': data['main']['pressure'],
-            'description': data['weather'][0]['description'],
-            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'location': data['name']
-        }
+             'temperature': data['main']['temp'],
+             'humidity': data['main']['humidity'],
+             'pressure': data['main']['pressure'],
+             'description': data['weather'][0]['description'],
+             'timestamp': datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+             'location': data['name']
+         }
 
         return jsonify(forecast_data), 200
 

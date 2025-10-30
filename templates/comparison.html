@@ -94,9 +94,20 @@
         }
 
         function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            date.setHours(date.getHours() + 3); // UTC+3
+            // Robust parse: ISO (with tz) or "YYYY-MM-DD HH:MM:SS" (treat as UTC)
+            let date;
+            if (typeof timestamp !== 'string') return '-';
+            if (timestamp.includes('T')) {
+                const hasTz = /[zZ]|[+\-]\d{2}:\d{2}$/.test(timestamp);
+                date = new Date(hasTz ? timestamp : (timestamp + 'Z'));
+            } else {
+                const [d, t] = timestamp.split(' ');
+                const [y, m, day] = d.split('-').map(Number);
+                const [hh, mm, ss] = (t ? t.split(':') : ['0','0','0']).map(Number);
+                date = new Date(Date.UTC(y, m - 1, day, hh, mm, ss));
+            }
             return date.toLocaleString('uk-UA', {
+                timeZone: 'Europe/Kyiv',
                 hour12: false,
                 day: '2-digit',
                 month: '2-digit',

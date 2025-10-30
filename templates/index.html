@@ -244,38 +244,34 @@
 
             const html = `
                 <h4>Дані станом на ${(() => {
-                    // Ensure timestamp is in a format that works across all browsers
                     const timestamp = data[0].timestamp;
-                    // Handle different timestamp formats
                     let date;
                     if (timestamp.includes('T')) {
-                        // If ISO format
-                        date = new Date(timestamp);
+                        const hasTz = /[zZ]|[+\-]\d{2}:\d{2}$/.test(timestamp);
+                        date = new Date(hasTz ? timestamp : (timestamp + 'Z'));
                     } else {
                         // If "YYYY-MM-DD HH:MM:SS" format
                         const [datePart, timePart] = timestamp.split(' ');
-                        const [year, month, day] = datePart.split('-');
-                        const [hour, minute, second] = timePart ? timePart.split(':') : [0, 0, 0];
-                        date = new Date(year, month - 1, day, hour, minute, second);
+                        const [year, month, day] = datePart.split('-').map(Number);
+                        const [hour, minute, second] = (timePart ? timePart.split(':') : ['0','0','0']).map(Number);
+                        date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
                     }
                     
-                    // Add 3 hours for timezone adjustment
-                    date.setHours(date.getHours() + 3);
-                    
-                    // Format the date
                     try {
                         return date.toLocaleString('uk-UA', {
+                            timeZone: 'Europe/Kyiv',
                             hour12: false,
-                            day: '2-digit',
-                            month: '2-digit',
                             year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
                             hour: '2-digit',
-                            minute: '2-digit'
-                        }).replace(',', ' о');
+                            minute: '2-digit',
+                            second: '2-digit'
+                        }).replace(',', '');
                     } catch (e) {
-                        // Fallback formatting if toLocaleString fails
                         const pad = (num) => String(num).padStart(2, '0');
-                        return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} о ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+                        const kyiv = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+                        return `${pad(kyiv.getDate())}.${pad(kyiv.getMonth() + 1)}.${kyiv.getFullYear()} ${pad(kyiv.getHours())}:${pad(kyiv.getMinutes())}:${pad(kyiv.getSeconds())}`;
                     }
                 })()}</h4>
                 <ul class="list-group list-group-flush">

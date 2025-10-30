@@ -21,8 +21,8 @@ A Flask-based web application that provides a real-time interface for weather st
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Kushchyk/IS_project.git
-cd IS_project
+git clone https://github.com/BogdanVereshchak/MeteostationFlaskAPI.git
+cd MeteostationFlaskAPI
 ```
 
 2. Create and activate a virtual environment:

@@ -57,25 +57,37 @@
             fetch('/api/data')
                 .then(res => res.json())
                 .then(data => {
-                    const rows = data.map(item => `
+                    const rows = data.map((item, index) => {
+                        const currentTips = item.rainfall?.tips ?? 0;
+                        const previousItem = data[index + 1];
+                        const previousTips = previousItem?.rainfall?.tips ?? null;
+                        
+                        let rainfallDeltaMm = 'N/A';
+                        if (previousTips !== null) {
+                            const delta = currentTips - previousTips;
+                            rainfallDeltaMm = (Math.max(0, delta) * 0.987).toFixed(2);
+                        }
+
+                        return `
                         <tr>
                             <td>${
                             (() => {
                                 const timestamp = item.timestamp;
+                                if (!timestamp || typeof timestamp !== 'string') return '-';
                                 let date;
                                 if (timestamp.includes('T')) {
-                                    date = new Date(timestamp);
+                                    const hasTz = /[zZ]|[+\-]\d{2}:\d{2}$/.test(timestamp);
+                                    date = new Date(hasTz ? timestamp : (timestamp + 'Z'));
                                 } else {
                                     const [datePart, timePart] = timestamp.split(' ');
-                                    const [year, month, day] = datePart.split('-');
-                                    const [hour, minute, second] = timePart ? timePart.split(':') : [0, 0, 0];
-                                    date = new Date(year, month - 1, day, hour, minute, second);
+                                    const [year, month, day] = datePart.split('-').map(Number);
+                                    const [hour, minute, second] = (timePart ? timePart.split(':') : ['0','0','0']).map(Number);
+                                    date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
                                 }
-                                
-                                date.setHours(date.getHours() + 3);
-                                
+
                                 try {
                                     return date.toLocaleString('uk-UA', {
+                                        timeZone: 'Europe/Kyiv',
                                         hour12: false,
                                         year: 'numeric',
                                         month: '2-digit',
@@ -83,10 +95,11 @@
                                         hour: '2-digit',
                                         minute: '2-digit',
                                         second: '2-digit'
-                                    });
+                                    }).replace(',', '');
                                 } catch (e) {
                                     const pad = (num) => String(num).padStart(2, '0');
-                                    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+                                    const kyiv = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+                                    return `${pad(kyiv.getDate())}.${pad(kyiv.getMonth() + 1)}.${kyiv.getFullYear()} ${pad(kyiv.getHours())}:${pad(kyiv.getMinutes())}:${pad(kyiv.getSeconds())}`;
                                 }
                             })()
                             }</td>
@@ -96,10 +109,11 @@
                             <td>${item.air_quality.tvoc} Ppb</td>
                             <td>${item.air_quality.aqi}</td>
                             <td>${item.air_quality.eco2} ppm</td>
-                            <td>${(item.rainfall.tips * 0.987).toFixed(2)} мм/м2</td>
+                            <td>${rainfallDeltaMm} мм/м²</td>
                         </tr>
-                    `).join('');
-                    document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="5">Немає даних</td></tr>';
+                        `;
+                    }).join('');
+                    document.getElementById('historyData').innerHTML = rows || '<tr><td colspan="8">Немає даних</td></tr>';
                 });
         }
 
