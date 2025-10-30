@@ -2,4 +2,8 @@ subjectAltName = @alt_names
 
 [alt_names]
 IP.1 = 192.168.0.102
-DNS.1 = localhost
+IP.2 = 192.168.1.105
+IP.3 = 172.20.10.2
+DNS.1 = weatherstation.local
+DNS.2 = myiot.local
+DNS.3 = localhost

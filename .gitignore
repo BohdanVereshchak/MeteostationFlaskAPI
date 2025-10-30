@@ -24,4 +24,4 @@ venv/
 *.db
 
 # Flask secret key files or config overrides (optional)
-config/config_db.py
+#config/config_db.py
