@@ -363,7 +363,7 @@ def get_weather_forecast():
         response.raise_for_status()
 
         data = response.json()
-        print("Weather API response:", data)
+        # print("Weather API response:", data)
 
         # Extract relevant weather data
         forecast_data = {
@@ -462,7 +462,8 @@ def comparison_page():
     return render_template("comparison.html")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv("PORT", 8080)))
-    #app.run(host='0.0.0.0', port=8080, debug=True, ssl_context=('cert.pem', 'key.pem'))
+    from waitress import serve
+    print("Starting production server with Waitress on http://0.0.0.0:5000")
+    serve(app, host='0.0.0.0', port=5000)
 
 
