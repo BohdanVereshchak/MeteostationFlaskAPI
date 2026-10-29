@@ -43,3 +43,5 @@ config/config_db.py
 !.env.example
 node_modules/
 coverage/
+
+.session-secret
