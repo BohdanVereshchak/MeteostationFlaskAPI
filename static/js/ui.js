@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 export function setText(id, value) {
     document.getElementById(id).textContent = value;
 }
@@ -49,18 +50,18 @@ export async function requestJSON(url, options = {}) {
         const data = await response.json();
         if (!response.ok) {
             const message = typeof data.error === "string" ? data.error : data.reason;
-            const error = new Error(message || "Не вдалося завантажити дані. Спробуйте ще раз.");
+            const error = new Error(message || t("Не вдалося завантажити дані. Спробуйте ще раз."));
             error.status = response.status;
             throw error;
         }
         return data;
     } catch (error) {
         if (error.name === "AbortError")
-            throw new Error("Сервер не відповів вчасно. Повторіть запит.");
+            throw new Error(t("Сервер не відповів вчасно. Повторіть запит."));
         if (error instanceof TypeError)
-            throw new Error("Немає зв’язку із сервером. Перевірте підключення.");
+            throw new Error(t("Немає зв’язку із сервером. Перевірте підключення."));
         if (error instanceof SyntaxError)
-            throw new Error("Сервер повернув неочікувану відповідь. Повторіть запит пізніше.");
+            throw new Error(t("Сервер повернув неочікувану відповідь. Повторіть запит пізніше."));
         throw error;
     } finally {
         clearTimeout(timeout);

@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { createTimeChart } from "./chart.js";
 import {
     formatNumber,
@@ -34,11 +35,11 @@ export function initialize() {
         }
         const threshold = configuration
             ? thresholdMessage(values.temperature, configuration.temperature)
-            : { text: "Межі сповіщень зараз недоступні", warning: false };
+            : { text: t("Межі сповіщень зараз недоступні"), warning: false };
         setText("temperature-note", threshold.text);
         document.getElementById("temperature-note").dataset.warning = String(threshold.warning);
         setText("reading-time", formatTimestamp(reading.timestamp, { year: "numeric" }));
-        setText("observation-date", "Власна точка спостереження");
+        setText("observation-date", t("Власна точка спостереження"));
         setConnection(
             "station-status",
             freshness(reading.timestamp, configuration?.system?.update_interval_ms),
@@ -51,12 +52,19 @@ export function initialize() {
         const total = available.reduce((sum, point) => sum + point.rainfall_mm, 0);
         const maximum = Math.max(1, ...available.map((point) => point.rainfall_mm));
         setText("rain-total", available.length ? formatNumber(total, 2) : "—");
-        const defaultNote = `Дані за ${available.length} з ${report.hours} год. ${available.length < report.hours ? "Штрихування — неповні інтервали; вони не входять у суму." : "Натисніть на стовпчик, щоб побачити вимірювання."}`;
+        const defaultNote = t("Дані за {available} з {hours} год. {note}", {
+            available: available.length,
+            hours: report.hours,
+            note:
+                available.length < report.hours
+                    ? t("Штрихування — неповні інтервали; вони не входять у суму.")
+                    : t("Натисніть на стовпчик, щоб побачити вимірювання."),
+        });
         setText("rain-note", defaultNote);
         container.replaceChildren();
         report.data.forEach((point, index) => {
             const missing = point.rainfall_mm === null;
-            const label = `${point.time_label} · ${missing ? "Недостатньо вимірювань" : `${formatNumber(point.rainfall_mm, 2)} мм`}`;
+            const label = `${point.time_label} · ${missing ? t("Недостатньо вимірювань") : `${formatNumber(point.rainfall_mm, 2)} ${t("мм")}`}`;
             const button = document.createElement("button");
             button.type = "button";
             button.className = "rain-bar";
@@ -119,17 +127,22 @@ export function initialize() {
         } else {
             setConnection("station-status", {
                 state: "error",
-                label: "Немає актуального спостереження",
+                label: t("Немає актуального спостереження"),
             });
             showNotice(
                 readingResult.status === "rejected"
                     ? readingResult.reason.message
-                    : "Станція ще не передала вимірювань. Після першого запису вони з’являться тут.",
+                    : t(
+                          "Станція ще не передала вимірювань. Після першого запису вони з’являться тут.",
+                      ),
             );
         }
         if (historyResult.status === "fulfilled") {
             history = historyResult.value;
-            setText("overview-chart-note", "Середні значення за інтервалами · останні 24 години");
+            setText(
+                "overview-chart-note",
+                t("Середні значення за інтервалами · останні 24 години"),
+            );
             chart.update(history.series, metric, history.bucket_seconds);
             const { minimum, maximum } = history.summary;
             setText(

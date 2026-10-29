@@ -1,29 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Ваша станція{% endblock %}
+{% block title %}{{ t('Ваша станція') }}{% endblock %}
 {% block page %}settings{% endblock %}
 {% block content %}
     <div class="page-heading">
         <div>
-            <p class="section-label">Налаштовано під ваше місце</p>
-            <h1>Ваша станція</h1>
+            <p class="section-label">{{ t('Налаштовано під ваше місце') }}</p>
+            <h1>{{ t('Ваша станція') }}</h1>
         </div>
         {{ icon('sliders-horizontal', 'heading-icon') }}
     </div>
-    <p class="page-intro">Оберіть ритм вимірювань, місце спостереження та межі для сповіщень.</p>
+    <p class="page-intro">{{ t('Оберіть ритм вимірювань, місце спостереження та межі для сповіщень.') }}</p>
     <p id="page-message" class="notice" role="status" hidden></p>
     <form id="station-form" class="settings-layout">
         <div class="settings-sections">
             <fieldset>
-                <legend>{{ icon('radio') }} Ритм спостережень</legend>
+                <legend>{{ icon('radio') }} {{ t('Ритм спостережень') }}</legend>
                 <p class="field-description">
-                    Інтервал передається станції під час отримання нею конфігурації.
+                    {{ t('Інтервал передається станції під час отримання нею конфігурації.') }}
                 </p>
-                <label for="update-interval">Інтервал вимірювань, секунди</label>
+                <label for="update-interval">{{ t('Інтервал вимірювань, секунди') }}</label>
                 <div class="interval-control">
                     <button
                         type="button"
                         data-step="-10"
-                        aria-label="Зменшити інтервал на 10 секунд"
+                        aria-label="{{ t('Зменшити інтервал на 10 секунд') }}"
                     >
                         {{ icon('minus') }}
                     </button>
@@ -39,40 +39,39 @@
                     <button
                         type="button"
                         data-step="10"
-                        aria-label="Збільшити інтервал на 10 секунд"
+                        aria-label="{{ t('Збільшити інтервал на 10 секунд') }}"
                     >
                         {{ icon('plus') }}
                     </button>
                 </div>
-                <div class="interval-presets" aria-label="Швидкий вибір інтервалу">
-                    <button type="button" data-interval="30">30 с</button>
-                    <button type="button" data-interval="60">1 хв</button>
-                    <button type="button" data-interval="300">5 хв</button>
+                <div class="interval-presets" aria-label="{{ t('Швидкий вибір інтервалу') }}">
+                    <button type="button" data-interval="30">{{ t('30 с') }}</button>
+                    <button type="button" data-interval="60">{{ t('1 хв') }}</button>
+                    <button type="button" data-interval="300">{{ t('5 хв') }}</button>
                 </div>
             </fieldset>
             <fieldset>
-                <legend>{{ icon('map-pin') }} Місце спостереження</legend>
+                <legend>{{ icon('map-pin') }} {{ t('Місце спостереження') }}</legend>
                 <p class="field-description">
-                    Координати визначають точку зіставлення з OpenWeather. Можна ввести їх вручну
-                    або знайти населений пункт.
+                    {{ t('Координати визначають точку зіставлення з OpenWeather. Можна ввести їх вручну або знайти населений пункт.') }}
                 </p>
-                <label for="location-search">Місто або населений пункт</label>
+                <label for="location-search">{{ t('Місто або населений пункт') }}</label>
                 <div class="search-control">
                     <input
                         id="location-search"
                         type="search"
-                        placeholder="Наприклад, Львів"
+                        placeholder="{{ t('Наприклад, Львів') }}"
                         maxlength="120"
                     />
                     <button type="button" id="search-location" class="button button-secondary">
-                        {{ icon('search') }} Знайти
+                        {{ icon('search') }} {{ t('Знайти') }}
                     </button>
                 </div>
-                <p class="field-description">Пошук надсилає введену назву сервісу Open-Meteo.</p>
+                <p class="field-description">{{ t('Пошук надсилає введену назву сервісу Open-Meteo.') }}</p>
                 <div id="location-results" class="location-results" role="status"></div>
                 <div class="field-pair">
                     <div>
-                        <label for="latitude">Широта</label>
+                        <label for="latitude">{{ t('Широта') }}</label>
                         <input
                             id="latitude"
                             name="latitude"
@@ -84,7 +83,7 @@
                         />
                     </div>
                     <div>
-                        <label for="longitude">Довгота</label>
+                        <label for="longitude">{{ t('Довгота') }}</label>
                         <input
                             id="longitude"
                             name="longitude"
@@ -98,14 +97,14 @@
                 </div>
             </fieldset>
             <fieldset>
-                <legend>{{ icon('bell') }} Межі сповіщень</legend>
+                <legend>{{ icon('bell') }} {{ t('Межі сповіщень') }}</legend>
                 <p class="field-description">
-                    Порожнє поле вимикає відповідну межу. Нуль — допустиме значення.
+                    {{ t('Порожнє поле вимикає відповідну межу. Нуль — допустиме значення.') }}
                 </p>
-                <h2 class="field-group-heading">Температура, °C</h2>
+                <h2 class="field-group-heading">{{ t('Температура, °C') }}</h2>
                 <div class="field-pair">
                     <div>
-                        <label for="temperature-min">Нижня межа</label>
+                        <label for="temperature-min">{{ t('Нижня межа') }}</label>
                         <input
                             id="temperature-min"
                             name="temperature_min"
@@ -113,11 +112,11 @@
                             min="-100"
                             max="100"
                             step="any"
-                            placeholder="Без обмеження"
+                            placeholder="{{ t('Без обмеження') }}"
                         />
                     </div>
                     <div>
-                        <label for="temperature-max">Верхня межа</label>
+                        <label for="temperature-max">{{ t('Верхня межа') }}</label>
                         <input
                             id="temperature-max"
                             name="temperature_max"
@@ -125,14 +124,14 @@
                             min="-100"
                             max="100"
                             step="any"
-                            placeholder="Без обмеження"
+                            placeholder="{{ t('Без обмеження') }}"
                         />
                     </div>
                 </div>
-                <h2 class="field-group-heading">Вологість, %</h2>
+                <h2 class="field-group-heading">{{ t('Вологість, %') }}</h2>
                 <div class="field-pair">
                     <div>
-                        <label for="humidity-min">Нижня межа</label>
+                        <label for="humidity-min">{{ t('Нижня межа') }}</label>
                         <input
                             id="humidity-min"
                             name="humidity_min"
@@ -140,11 +139,11 @@
                             min="0"
                             max="100"
                             step="any"
-                            placeholder="Без обмеження"
+                            placeholder="{{ t('Без обмеження') }}"
                         />
                     </div>
                     <div>
-                        <label for="humidity-max">Верхня межа</label>
+                        <label for="humidity-max">{{ t('Верхня межа') }}</label>
                         <input
                             id="humidity-max"
                             name="humidity_max"
@@ -152,7 +151,7 @@
                             min="0"
                             max="100"
                             step="any"
-                            placeholder="Без обмеження"
+                            placeholder="{{ t('Без обмеження') }}"
                         />
                     </div>
                 </div>
@@ -162,24 +161,23 @@
             <div class="station-stamp">
                 {{ icon('radio') }}
                 <span>
-                    Ваше місце.
+                    {{ t('Ваше місце.') }}
                     <br />
-                    Ваші вимірювання.
+                    {{ t('Ваші вимірювання.') }}
                 </span>
             </div>
-            <h2>Зберегти зміни</h2>
+            <h2>{{ t('Зберегти зміни') }}</h2>
             <p>
-                Межі використовуються сервером для перевірки наступних вимірювань. Уже збережені
-                спостереження не зміняться.
+                {{ t('Межі використовуються сервером для перевірки наступних вимірювань. Уже збережені спостереження не зміняться.') }}
             </p>
             <button type="submit" id="save-settings" class="button" disabled>
-                {{ icon('check') }} Зберегти налаштування
+                {{ icon('check') }} {{ t('Зберегти налаштування') }}
             </button>
             <p id="save-status" role="status" class="save-status">
-                Завантажуємо поточну конфігурацію
+                {{ t('Завантажуємо поточну конфігурацію') }}
             </p>
             <button type="reset" class="text-button" id="reset-settings" disabled>
-                Скасувати зміни
+                {{ t('Скасувати зміни') }}
             </button>
         </aside>
     </form>

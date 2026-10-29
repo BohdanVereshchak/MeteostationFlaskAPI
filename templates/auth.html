@@ -1,37 +1,36 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Створити обліковий запис' if register else 'Увійти' }}{% endblock %}
+{% block title %}{{ t('Створити обліковий запис') if register else t('Увійти') }}{% endblock %}
 {% block page %}auth{% endblock %}
 {% block content %}
     <div class="auth-layout">
         <section class="auth-introduction">
             <span class="auth-symbol">{{ icon('radio') }}</span>
-            <p class="section-label">Власна точка спостереження</p>
+            <p class="section-label">{{ t('Власна точка спостереження') }}</p>
             <h1>
-                Ваша погода.
+                {{ t('Ваша погода.') }}
                 <br />
-                На вашому місці.
+                {{ t('На вашому місці.') }}
             </h1>
             <p>
-                Підключайте свої станції, стежте за змінами та повертайтеся до власного архіву
-                спостережень.
+                {{ t('Підключайте свої станції, стежте за змінами та повертайтеся до власного архіву спостережень.') }}
             </p>
             <div class="auth-features">
-                <span>{{ icon('gauge') }} Локальні вимірювання</span>
-                <span>{{ icon('cloud-rain') }} Щоденник дощу</span>
-                <span>{{ icon('radio') }} Кілька власних станцій</span>
+                <span>{{ icon('gauge') }} {{ t('Локальні вимірювання') }}</span>
+                <span>{{ icon('cloud-rain') }} {{ t('Щоденник дощу') }}</span>
+                <span>{{ icon('radio') }} {{ t('Кілька власних станцій') }}</span>
             </div>
         </section>
         <section class="auth-form-panel" aria-labelledby="auth-heading">
             <p class="section-label">
-                {{ 'Перша точка вашої мережі' if register else 'Раді бачити знову' }}
+                {{ t('Перша точка вашої мережі') if register else t('Раді бачити знову') }}
             </p>
             <h2 id="auth-heading">
-                {{ 'Створити обліковий запис' if register else 'Увійти до Meteo' }}
+                {{ t('Створити обліковий запис') if register else t('Увійти до Meteo') }}
             </h2>
             {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
             <form method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label for="username">Ім’я користувача</label>
+                <label for="username">{{ t('Ім’я користувача') }}</label>
                 <input
                     id="username"
                     name="username"
@@ -46,10 +45,10 @@
                 />
                 {% if register %}
                     <p class="field-description">
-                        3–32 латинські літери, цифри, крапка, дефіс або підкреслення.
+                        {{ t('3–32 латинські літери, цифри, крапка, дефіс або підкреслення.') }}
                     </p>
                 {% endif %}
-                <label for="password">Пароль</label>
+                <label for="password">{{ t('Пароль') }}</label>
                 <input
                     id="password"
                     name="password"
@@ -60,8 +59,8 @@
                     maxlength="128"
                 />
                 {% if register %}
-                    <p class="field-description">Від 10 символів. Краще використати довгу фразу.</p>
-                    <label for="password-confirmation">Повторіть пароль</label>
+                    <p class="field-description">{{ t('Від 10 символів. Краще використати довгу фразу.') }}</p>
+                    <label for="password-confirmation">{{ t('Повторіть пароль') }}</label>
                     <input
                         id="password-confirmation"
                         name="password_confirmation"
@@ -73,14 +72,14 @@
                     />
                 {% endif %}
                 <button class="button" type="submit">
-                    {{ 'Створити обліковий запис' if register else 'Увійти' }}
+                    {{ t('Створити обліковий запис') if register else t('Увійти') }}
                     {{ icon('arrow-up-right') }}
                 </button>
             </form>
             <p class="auth-alternative">
-                {{ 'Уже маєте обліковий запис?' if register else 'Перший раз у Meteo?' }}
+                {{ t('Уже маєте обліковий запис?') if register else t('Перший раз у Meteo?') }}
                 <a href="{{ url_for('auth.login' if register else 'auth.register') }}">
-                    {{ 'Увійти' if register else 'Створити обліковий запис' }}
+                    {{ t('Увійти') if register else t('Створити обліковий запис') }}
                 </a>
             </p>
         </section>

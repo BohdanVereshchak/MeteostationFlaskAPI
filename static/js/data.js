@@ -1,7 +1,8 @@
+import { t, locale } from "./i18n.js";
 export const METRICS = {
-    temperature: { label: "Температура", unit: "°C", digits: 1 },
-    humidity: { label: "Вологість", unit: "%", digits: 1 },
-    pressure: { label: "Тиск", unit: "гПа", digits: 1 },
+    temperature: { label: t("Температура"), unit: "°C", digits: 1 },
+    humidity: { label: t("Вологість"), unit: "%", digits: 1 },
+    pressure: { label: t("Тиск"), unit: t("гПа"), digits: 1 },
     eco2: { label: "eCO₂", unit: "ppm", digits: 0 },
     tvoc: { label: "TVOC", unit: "ppb", digits: 0 },
     aqi: { label: "AQI", unit: "", digits: 0 },
@@ -18,7 +19,7 @@ export function formatNumber(value, digits = 1) {
     const number = numberOrNull(value);
     return number === null
         ? "—"
-        : new Intl.NumberFormat("uk-UA", {
+        : new Intl.NumberFormat(locale, {
               minimumFractionDigits: digits,
               maximumFractionDigits: digits,
           }).format(number);
@@ -34,8 +35,8 @@ export function parseTimestamp(value) {
 
 export function formatTimestamp(value, options = {}) {
     const date = value instanceof Date ? value : parseTimestamp(value);
-    if (!date) return "Час не вказано";
-    return new Intl.DateTimeFormat("uk-UA", {
+    if (!date) return t("Час не вказано");
+    return new Intl.DateTimeFormat(locale, {
         timeZone: "Europe/Kyiv",
         day: "2-digit",
         month: "2-digit",
@@ -59,32 +60,41 @@ export function readingValues(reading) {
 
 export function freshness(timestamp, intervalMs = 60000, now = Date.now()) {
     const date = parseTimestamp(timestamp);
-    if (!date) return { state: "error", label: "Час вимірювання невідомий" };
+    if (!date) return { state: "error", label: t("Час вимірювання невідомий") };
     const age = now - date.getTime();
-    if (age < -60000) return { state: "error", label: "Перевірте годинник станції" };
+    if (age < -60000) return { state: "error", label: t("Перевірте годинник станції") };
     const minutes = Math.max(0, Math.floor(age / 60000));
     const stale = age > Math.max(300000, intervalMs * 3);
-    const ago = minutes < 1 ? "менше хвилини тому" : `${formatNumber(minutes, 0)} хв тому`;
+    const ago =
+        minutes < 1
+            ? t("менше хвилини тому")
+            : t("{minutes} хв тому", { minutes: formatNumber(minutes, 0) });
     return {
         state: stale ? "stale" : "recent",
-        label: `${stale ? "Дані застаріли" : "Отримано"} · ${ago}`,
+        label: `${stale ? t("Дані застаріли") : t("Отримано")} · ${ago}`,
     };
 }
 
 export function thresholdMessage(value, limits) {
     const number = numberOrNull(value);
-    if (number === null) return { text: "Немає показника температури", warning: false };
+    if (number === null) return { text: t("Немає показника температури"), warning: false };
     const minimum = numberOrNull(limits?.min);
     const maximum = numberOrNull(limits?.max);
     if (minimum !== null && number < minimum)
-        return { text: `Нижче встановленої межі ${formatNumber(minimum)} °C`, warning: true };
+        return {
+            text: t("Нижче встановленої межі {value} °C", { value: formatNumber(minimum) }),
+            warning: true,
+        };
     if (maximum !== null && number > maximum)
-        return { text: `Вище встановленої межі ${formatNumber(maximum)} °C`, warning: true };
+        return {
+            text: t("Вище встановленої межі {value} °C", { value: formatNumber(maximum) }),
+            warning: true,
+        };
     return {
         text:
             minimum === null && maximum === null
-                ? "Локальне спостереження станції"
-                : "У межах ваших налаштувань",
+                ? t("Локальне спостереження станції")
+                : t("У межах ваших налаштувань"),
         warning: false,
     };
 }
@@ -101,8 +111,10 @@ export function configurationFromForm(form) {
     for (const name of ["temperature", "humidity"]) {
         const limits = configuration[name];
         if (limits.min !== null && limits.max !== null && limits.min > limits.max) {
-            const label = name === "temperature" ? "температури" : "вологості";
-            throw new Error(`Нижня межа ${label} не може перевищувати верхню.`);
+            const label = name === "temperature" ? t("температури") : t("вологості");
+            throw new Error(
+                t("Нижня межа {metric} не може перевищувати верхню.", { metric: label }),
+            );
         }
     }
     return configuration;

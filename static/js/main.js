@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     document.getElementById("main").animate(
         [
@@ -36,7 +37,7 @@ if (loadPage) {
         .then((module) => module.initialize())
         .catch(() => {
             const notice = document.getElementById("page-message");
-            notice.textContent = "Не вдалося відкрити інтерфейс. Оновіть сторінку.";
+            notice.textContent = t("Не вдалося відкрити інтерфейс. Оновіть сторінку.");
             notice.hidden = false;
         });
 }

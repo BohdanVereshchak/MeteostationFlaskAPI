@@ -10,6 +10,7 @@ import hmac
 import hashlib
 import logging
 import os
+from i18n import t, current_language, install_localization
 from config.config_db import (
     AUTHORIZED_TOKENS,
     COLLECTION_NAME,
@@ -64,6 +65,7 @@ db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
 
+install_localization(app)
 install_authentication(app, db, AUTHORIZED_TOKENS, config)
 
 logging.basicConfig(level=logging.INFO)
@@ -73,7 +75,7 @@ logging.basicConfig(level=logging.INFO)
 def database_unavailable(error):
     app.logger.warning("Database request failed: %s", type(error).__name__)
     return (
-        jsonify({"error": "Сховище вимірювань тимчасово недоступне. Повторіть запит пізніше."}),
+        jsonify({"error": t("Сховище вимірювань тимчасово недоступне. Повторіть запит пізніше.")}),
         503,
     )
 
@@ -191,9 +193,9 @@ def get_history():
     try:
         hours = int(request.args.get("hours", 24))
     except ValueError:
-        return jsonify({"error": "Період має бути цілим числом годин."}), 400
+        return jsonify({"error": t("Період має бути цілим числом годин.")}), 400
     if not 1 <= hours <= 720:
-        return jsonify({"error": "Оберіть період від 1 до 720 годин."}), 400
+        return jsonify({"error": t("Оберіть період від 1 до 720 годин.")}), 400
     return jsonify(history_report(collection, hours, device_filter=active_data_filter()))
 
 
@@ -318,10 +320,10 @@ def update_config():
     try:
         new_configuration = validate_configuration(request.get_json(silent=True))
     except ValueError as error:
-        return jsonify({"error": str(error)}), 400
+        return jsonify({"error": t(str(error))}), 400
     saved = account_store().save_settings(str(g.station["_id"]), g.user["_id"], new_configuration)
     if not saved:
-        return jsonify({"error": "Станція більше не належить цьому обліковому запису."}), 403
+        return jsonify({"error": t("Станція більше не належить цьому обліковому запису.")}), 403
     return jsonify({"status": "updated"}), 200
 
 
@@ -361,7 +363,7 @@ def get_weather_forecast():
             "lon": location.get("longitude", WEATHER_LOCATION_LON),
             "appid": OPENWEATHER_API_KEY,
             "units": "metric",
-            "lang": "uk",
+            "lang": current_language(),
         }
 
         response = requests.get(url, params=params, timeout=10)
@@ -384,17 +386,17 @@ def get_weather_forecast():
 
     except requests.RequestException as e:
         app.logger.warning("OpenWeather request failed: %s", type(e).__name__)
-        return jsonify({"error": "Не вдалося отримати поточну погоду OpenWeather."}), 500
+        return jsonify({"error": t("Не вдалося отримати поточну погоду OpenWeather.")}), 500
     except Exception as e:
         app.logger.warning("OpenWeather response invalid: %s", type(e).__name__)
-        return jsonify({"error": "Внутрішня помилка сервера"}), 500
+        return jsonify({"error": t("Внутрішня помилка сервера")}), 500
 
 
 @app.route("/api/weather/comparison", methods=["GET"])
 def get_weather_comparison():
     station = latest_reading(collection, device_filter=active_data_filter())
     if not station:
-        return jsonify({"error": "Станція ще не передала вимірювань."}), 404
+        return jsonify({"error": t("Станція ще не передала вимірювань.")}), 404
     reference_response, status = get_weather_forecast()
     if status != 200:
         return reference_response, status
@@ -411,7 +413,11 @@ def get_weather_comparison():
         if observed is None or external is None:
             return (
                 jsonify(
-                    {"error": "Для зіставлення потрібні температура, вологість і тиск обох джерел."}
+                    {
+                        "error": t(
+                            "Для зіставлення потрібні температура, вологість і тиск обох джерел."
+                        )
+                    }
                 ),
                 422,
             )

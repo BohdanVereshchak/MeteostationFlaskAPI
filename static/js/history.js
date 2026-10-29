@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { createTimeChart } from "./chart.js";
 import { csvDocument, formatNumber, formatTimestamp, readingValues } from "./data.js";
 import { appendCells, markSelection, requestJSON, setText, showNotice } from "./ui.js";
@@ -29,11 +30,17 @@ export function initialize() {
         if (!report.readings.length) {
             const cell = body.insertRow().insertCell();
             cell.colSpan = 7;
-            cell.textContent = "У цьому періоді вимірювань немає. Оберіть інший період.";
+            cell.textContent = t("У цьому періоді вимірювань немає. Оберіть інший період.");
         }
-        setText("log-count", `${report.readings.length} із ${report.summary?.count ?? 0} записів`);
+        setText(
+            "log-count",
+            t("{shown} із {total} записів", {
+                shown: report.readings.length,
+                total: report.summary?.count ?? 0,
+            }),
+        );
         exportButton.disabled = !report.readings.length;
-        exportButton.title = "Окремі вимірювання з журналу (до 100 записів)";
+        exportButton.title = t("Окремі вимірювання з журналу (до 100 записів)");
     }
 
     async function loadHistory() {
@@ -53,7 +60,10 @@ export function initialize() {
             }
             setText(
                 "history-caption",
-                `Крок графіка: ${formatNumber(report.bucket_seconds / 60, 0)} хв. Графік показує середні значення; прогалини не з’єднуються. Журнал і CSV містять до 100 останніх окремих вимірювань.`,
+                t(
+                    "Крок графіка: {minutes} хв. Графік показує середні значення; прогалини не з’єднуються. Журнал і CSV містять до 100 останніх окремих вимірювань.",
+                    { minutes: formatNumber(report.bucket_seconds / 60, 0) },
+                ),
             );
             renderRows();
         } catch (error) {

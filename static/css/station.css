@@ -1968,3 +1968,54 @@ input::placeholder {
 .preview-pairing {
     overflow-wrap: anywhere;
 }
+
+.language-switch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+}
+.language-switch a {
+    display: inline-flex;
+    width: auto;
+    min-width: 36px;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 8px;
+    border: 1px solid #688297;
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+}
+.language-switch a[aria-current] {
+    background: var(--frosted-blue);
+    color: var(--oxford-navy);
+    border-color: var(--frosted-blue);
+}
+.header-inner > .language-switch {
+    margin-left: 18px;
+}
+.account-language {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border-block: 1px solid var(--rule);
+    padding: 10px;
+}
+.account-language .language-switch a {
+    border-color: #c2d7d5;
+    font-size: 11px;
+}
+@media (max-width: 650px) {
+    .anonymous-link {
+        display: none;
+    }
+    .header-inner > .language-switch {
+        margin-left: auto;
+    }
+    .header-inner:has(> .language-switch) {
+        padding-bottom: 15px;
+    }
+}

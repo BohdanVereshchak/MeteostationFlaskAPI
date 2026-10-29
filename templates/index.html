@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Погода тут і зараз{% endblock %}
+{% block title %}{{ t('Погода тут і зараз') }}{% endblock %}
 {% block content %}
     <div class="page-heading">
         <div>
-            <p class="section-label" id="observation-date">Ваш локальний погляд на погоду</p>
-            <h1>Погода тут і зараз</h1>
+            <p class="section-label" id="observation-date">{{ t('Ваш локальний погляд на погоду') }}</p>
+            <h1>{{ t('Погода тут і зараз') }}</h1>
         </div>
         <div class="heading-actions">
             <span class="connection-state" id="station-status" role="status">
-                Завантажуємо вимірювання
+                {{ t('Завантажуємо вимірювання') }}
             </span>
-            <button class="button button-icon" id="refresh" aria-label="Оновити вимірювання">
+            <button class="button button-icon" id="refresh" aria-label="{{ t('Оновити вимірювання') }}">
                 {{ icon('refresh-cw') }}
             </button>
         </div>
@@ -18,58 +18,58 @@
     <p id="page-message" class="notice" role="status" hidden></p>
     <section
         class="observation-board"
-        aria-label="Останнє спостереження"
+        aria-label="{{ t('Останнє спостереження') }}"
         aria-busy="true"
         id="observation-board"
     >
         <div class="current-observation">
-            <div class="observation-label">Температура повітря {{ icon('thermometer') }}</div>
+            <div class="observation-label">{{ t('Температура повітря') }} {{ icon('thermometer') }}</div>
             <div class="temperature-reading">
                 <span id="temperature">—</span>
                 <span class="temperature-unit">°C</span>
             </div>
-            <p class="observation-note" id="temperature-note">Очікуємо перше вимірювання</p>
+            <p class="observation-note" id="temperature-note">{{ t('Очікуємо перше вимірювання') }}</p>
             <div class="observation-time">
                 {{ icon('radio') }}
-                <time id="reading-time">Дані ще не завантажено</time>
+                <time id="reading-time">{{ t('Дані ще не завантажено') }}</time>
             </div>
         </div>
         <div class="trend-panel">
             <div class="panel-heading">
-                <h2>Ритм останньої доби</h2>
+                <h2>{{ t('Ритм останньої доби') }}</h2>
                 <a class="text-link" href="{{ url_for('history_page') }}">
-                    Відкрити архів {{ icon('arrow-up-right') }}
+                    {{ t('Відкрити архів') }} {{ icon('arrow-up-right') }}
                 </a>
             </div>
-            <div class="segment-control" aria-label="Показник на графіку" id="overview-metrics">
+            <div class="segment-control" aria-label="{{ t('Показник на графіку') }}" id="overview-metrics">
                 <button type="button" data-metric="temperature" aria-pressed="true">
-                    Температура
+                    {{ t('Температура') }}
                 </button>
-                <button type="button" data-metric="humidity" aria-pressed="false">Вологість</button>
-                <button type="button" data-metric="pressure" aria-pressed="false">Тиск</button>
+                <button type="button" data-metric="humidity" aria-pressed="false">{{ t('Вологість') }}</button>
+                <button type="button" data-metric="pressure" aria-pressed="false">{{ t('Тиск') }}</button>
             </div>
             <div class="time-chart" id="overview-chart"></div>
             <p class="chart-caption" id="overview-chart-note">
-                Середні значення за інтервалами · останні 24 години
+                {{ t('Середні значення за інтервалами · останні 24 години') }}
             </p>
         </div>
         <dl class="observation-rail">
             <div>
-                <dt>{{ icon('droplets') }} Вологість</dt>
+                <dt>{{ icon('droplets') }} {{ t('Вологість') }}</dt>
                 <dd>
                     <span id="humidity">—</span>
                     <small>%</small>
                 </dd>
             </div>
             <div>
-                <dt>{{ icon('gauge') }} Атмосферний тиск</dt>
+                <dt>{{ icon('gauge') }} {{ t('Атмосферний тиск') }}</dt>
                 <dd>
                     <span id="pressure">—</span>
-                    <small>гПа</small>
+                    <small>{{ t('гПа') }}</small>
                 </dd>
             </div>
             <div>
-                <dt>{{ icon('arrow-down-up') }} Діапазон за добу</dt>
+                <dt>{{ icon('arrow-down-up') }} {{ t('Діапазон за добу') }}</dt>
                 <dd class="range-reading" id="temperature-range">—</dd>
             </div>
         </dl>
@@ -78,76 +78,71 @@
         <section class="rain-panel" aria-labelledby="rain-heading">
             <div class="panel-heading">
                 <div>
-                    <p class="section-label">Кожна крапля має значення</p>
-                    <h2 id="rain-heading">Щоденник дощу</h2>
+                    <p class="section-label">{{ t('Кожна крапля має значення') }}</p>
+                    <h2 id="rain-heading">{{ t('Щоденник дощу') }}</h2>
                 </div>
                 {{ icon('cloud-rain', 'section-icon') }}
             </div>
             <div class="rain-controls">
                 <div class="rain-total">
                     <span id="rain-total">—</span>
-                    <small>мм</small>
+                    <small>{{ t('мм') }}</small>
                 </div>
-                <div class="segment-control" id="rain-periods" aria-label="Період опадів">
-                    <button data-hours="6" aria-pressed="false">6 год</button>
-                    <button data-hours="12" aria-pressed="false">12 год</button>
-                    <button data-hours="24" aria-pressed="true">24 год</button>
+                <div class="segment-control" id="rain-periods" aria-label="{{ t('Період опадів') }}">
+                    <button data-hours="6" aria-pressed="false">{{ t('6 год') }}</button>
+                    <button data-hours="12" aria-pressed="false">{{ t('12 год') }}</button>
+                    <button data-hours="24" aria-pressed="true">{{ t('24 год') }}</button>
                 </div>
             </div>
-            <div class="rain-chart" id="rain-chart" aria-label="Погодинні опади"></div>
+            <div class="rain-chart" id="rain-chart" aria-label="{{ t('Погодинні опади') }}"></div>
             <p id="rain-note" class="chart-caption" role="status">
-                Завантажуємо погодинні вимірювання
+                {{ t('Завантажуємо погодинні вимірювання') }}
             </p>
         </section>
         <section class="air-panel" aria-labelledby="air-heading">
             <div class="panel-heading">
                 <div>
-                    <p class="section-label">Те, чого не видно</p>
-                    <h2 id="air-heading">Повітря поруч</h2>
+                    <p class="section-label">{{ t('Те, чого не видно') }}</p>
+                    <h2 id="air-heading">{{ t('Повітря поруч') }}</h2>
                 </div>
                 {{ icon('wind', 'section-icon') }}
             </div>
             <dl class="air-readings">
                 <div>
                     <dt>
-                        Індекс сенсора
+                        {{ t('Індекс сенсора') }}
                         <span>AQI</span>
                     </dt>
                     <dd id="aqi">—</dd>
                 </div>
                 <div>
                     <dt>
-                        Еквівалент CO₂
+                        {{ t('Еквівалент CO₂') }}
                         <span>eCO₂ · ppm</span>
                     </dt>
                     <dd id="eco2">—</dd>
                 </div>
                 <div>
                     <dt>
-                        Леткі органічні сполуки
+                        {{ t('Леткі органічні сполуки') }}
                         <span>TVOC · ppb</span>
                     </dt>
                     <dd id="tvoc">—</dd>
                 </div>
             </dl>
             <p class="sensor-note">
-                eCO₂ — оцінка сенсора, а не пряме вимірювання CO₂. Значення AQI показано у шкалі
-                пристрою.
+                {{ t('eCO₂ — оцінка сенсора, а не пряме вимірювання CO₂. Значення AQI показано у шкалі пристрою.') }}
             </p>
         </section>
     </div>
     <details class="data-details">
-        <summary>Як читати ці вимірювання {{ icon('plus') }}</summary>
+        <summary>{{ t('Як читати ці вимірювання') }} {{ icon('plus') }}</summary>
         <div>
             <p>
-                Станція передає вимірювання періодично. Позначка давності показує вік останнього
-                запису, а не лише доступність сервера. Пропуски в графіках означають відсутність
-                даних.
+                {{ t('Станція передає вимірювання періодично. Позначка давності показує вік останнього запису, а не лише доступність сервера. Пропуски в графіках означають відсутність даних.') }}
             </p>
             <p>
-                Температура, вологість і тиск — локальні показники. Межі сповіщень можна змінити в
-                розділі «Станція». Дощ показується лише за інтервали з достатніми даними; скидання
-                лічильника не перетворюється на від’ємні опади.
+                {{ t('Температура, вологість і тиск — локальні показники. Межі сповіщень можна змінити в розділі «Станція». Дощ показується лише за інтервали з достатніми даними; скидання лічильника не перетворюється на від’ємні опади.') }}
             </p>
         </div>
     </details>

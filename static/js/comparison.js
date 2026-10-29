@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { METRICS, formatNumber, formatTimestamp } from "./data.js";
 import {
     requestJSON,
@@ -34,25 +35,35 @@ export function initialize() {
                 );
                 row.querySelector(".comparison-difference").setAttribute(
                     "aria-label",
-                    `Станція мінус OpenWeather: ${formatNumber(values.difference)} ${METRICS[key].unit}`,
+                    t("Станція мінус OpenWeather: {difference} {unit}", {
+                        difference: formatNumber(values.difference),
+                        unit: METRICS[key].unit,
+                    }),
                 );
             }
-            setText("comparison-location", data.location || "Місце не вказано");
+            setText("comparison-location", data.location || t("Місце не вказано"));
             setText("station-time", formatTimestamp(data.timestamp, { year: "numeric" }));
             setText(
                 "reference-time",
                 data.reference_timestamp
                     ? formatTimestamp(data.reference_timestamp, { year: "numeric" })
-                    : "Джерело не надало час",
+                    : t("Джерело не надало час"),
             );
-            setText("reference-description", data.forecast_description || "Опис відсутній");
+            setText("reference-description", data.forecast_description || t("Опис відсутній"));
             setConnection("comparison-status", {
                 state: "recent",
-                label: "Дані обох джерел завантажено",
+                label: t("Дані обох джерел завантажено"),
             });
         } catch (error) {
-            setConnection("comparison-status", { state: "error", label: "Зіставлення недоступне" });
-            showNotice(`${error.message} Власні вимірювання можна переглянути в розділі «Огляд».`);
+            setConnection("comparison-status", {
+                state: "error",
+                label: t("Зіставлення недоступне"),
+            });
+            showNotice(
+                t("{error} Власні вимірювання можна переглянути в розділі «Огляд».", {
+                    error: error.message,
+                }),
+            );
         } finally {
             setBusy(refreshButton, false);
             document.getElementById("comparison-board").setAttribute("aria-busy", "false");

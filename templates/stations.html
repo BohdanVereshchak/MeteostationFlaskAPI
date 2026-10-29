@@ -1,50 +1,48 @@
 {% extends "base.html" %}
-{% block title %}Мої станції{% endblock %}
+{% block title %}{{ t('Мої станції') }}{% endblock %}
 {% block page %}stations{% endblock %}
 {% block content %}
     <div class="page-heading">
         <div>
-            <p class="section-label">Мережа ваших спостережень</p>
-            <h1>Мої станції</h1>
+            <p class="section-label">{{ t('Мережа ваших спостережень') }}</p>
+            <h1>{{ t('Мої станції') }}</h1>
         </div>
         <span class="muted">{{ g.user.username }}</span>
     </div>
     <div class="stations-layout">
-        <section class="owned-stations" aria-label="Підключені станції">
+        <section class="owned-stations" aria-label="{{ t('Підключені станції') }}">
             {% for station in g.stations %}
                 <article class="owned-station">
                     <div class="station-card-icon">{{ icon('radio') }}</div>
                     <div>
                         <h2>{{ station.label }}</h2>
-                        <p class="muted">Пристрій {{ station.device_id }}</p>
+                        <p class="muted">{{ t('Пристрій') }} {{ station.device_id }}</p>
                     </div>
                     <form method="post" action="{{ url_for('auth.select_station') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         <input type="hidden" name="station_id" value="{{ station._id }}" />
                         <button class="button button-secondary" type="submit">
-                            Відкрити {{ icon('arrow-up-right') }}
+                            {{ t('Відкрити') }} {{ icon('arrow-up-right') }}
                         </button>
                     </form>
                     <details class="disconnect-station">
-                        <summary>Від’єднати від облікового запису</summary>
+                        <summary>{{ t('Від’єднати від облікового запису') }}</summary>
                         <p>
-                            Вимірювання та налаштування залишаться на сервері. Для повторного
-                            підключення знадобиться новий код підключення.
+                            {{ t('Вимірювання та налаштування залишаться на сервері. Для повторного підключення знадобиться новий код підключення.') }}
                         </p>
                         <form method="post" action="{{ url_for('auth.disconnect_station') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                             <input type="hidden" name="station_id" value="{{ station._id }}" />
-                            <button type="submit" class="text-button">Від’єднати станцію</button>
+                            <button type="submit" class="text-button">{{ t('Від’єднати станцію') }}</button>
                         </form>
                     </details>
                 </article>
             {% else %}
                 <div class="station-empty">
                     <span>{{ icon('radio') }}</span>
-                    <h2>Тут почнуться ваші спостереження</h2>
+                    <h2>{{ t('Тут почнуться ваші спостереження') }}</h2>
                     <p>
-                        Підключіть свою станцію. Її вимірювання, архів і налаштування будуть
-                        доступні лише вашому обліковому запису.
+                        {{ t('Підключіть свою станцію. Її вимірювання, архів і налаштування будуть доступні лише вашому обліковому запису.') }}
                     </p>
                 </div>
             {% endfor %}
@@ -52,29 +50,28 @@
         <section class="connect-station" aria-labelledby="connect-heading">
             {% if preview_pairing_code %}
                 <p class="preview-pairing">
-                    Демо-код для вільної станції:
+                    {{ t('Демо-код для вільної станції:') }}
                     <code>{{ preview_pairing_code }}</code>
                 </p>
             {% endif %}
-            <p class="section-label">Додати власний пристрій</p>
-            <h2 id="connect-heading">Підключити станцію</h2>
+            <p class="section-label">{{ t('Додати власний пристрій') }}</p>
+            <h2 id="connect-heading">{{ t('Підключити станцію') }}</h2>
             <p>
-                Отримайте в адміністратора сервера одноразовий код для вашого пристрою. Він діє 15
-                хвилин.
+                {{ t('Отримайте в адміністратора сервера одноразовий код для вашого пристрою. Він діє 15 хвилин.') }}
             </p>
             {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
             <form method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label for="station-label">Як назвати станцію?</label>
+                <label for="station-label">{{ t('Як назвати станцію?') }}</label>
                 <input
                     id="station-label"
                     name="label"
                     required
                     maxlength="60"
-                    placeholder="Наприклад, біля дому"
+                    placeholder="{{ t('Наприклад, біля дому') }}"
                     value="{{ request.form.get('label', '')[:60] }}"
                 />
-                <label for="pairing-code">Код підключення</label>
+                <label for="pairing-code">{{ t('Код підключення') }}</label>
                 <input
                     id="pairing-code"
                     name="pairing_code"
@@ -85,9 +82,9 @@
                     spellcheck="false"
                 />
                 <p class="field-description">
-                    Код підтверджує право підключити станцію. Токен прошивки вводити не потрібно.
+                    {{ t('Код підтверджує право підключити станцію. Токен прошивки вводити не потрібно.') }}
                 </p>
-                <button class="button" type="submit">{{ icon('plus') }} Підключити станцію</button>
+                <button class="button" type="submit">{{ icon('plus') }} {{ t('Підключити станцію') }}</button>
             </form>
         </section>
     </div>

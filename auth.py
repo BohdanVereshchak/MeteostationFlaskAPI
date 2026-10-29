@@ -22,6 +22,7 @@ from flask import (
 )
 
 from accounts import AccountStore, station_data_filter
+from i18n import t
 
 auth_pages = Blueprint("auth", __name__)
 
@@ -110,7 +111,7 @@ def login():
     if request.method == "POST":
         limiter = current_app.extensions["auth_limiter"]
         if not limiter.allow(("login", request.remote_addr)):
-            error, status = "Забагато спроб. Повторіть вхід через 15 хвилин.", 429
+            error, status = t("Забагато спроб. Повторіть вхід через 15 хвилин."), 429
         else:
             username = request.form.get("username", "")[:128]
             password = request.form.get("password", "")
@@ -120,7 +121,7 @@ def login():
             if user:
                 begin_session(user)
                 return redirect(url_for("index_page"), code=303)
-            error, status = "Перевірте ім’я користувача та пароль.", 400
+            error, status = t("Перевірте ім’я користувача та пароль."), 400
     return render_template("auth.html", register=False, error=error), status
 
 
@@ -134,17 +135,17 @@ def register():
         if not current_app.extensions["auth_limiter"].allow(
             ("register", request.remote_addr), 5, 3600
         ):
-            error, status = "Забагато спроб реєстрації. Повторіть пізніше.", 429
+            error, status = t("Забагато спроб реєстрації. Повторіть пізніше."), 429
         else:
             try:
                 password = request.form.get("password", "")
                 if password != request.form.get("password_confirmation", ""):
-                    raise ValueError("Паролі не збігаються.")
+                    raise ValueError(t("Паролі не збігаються."))
                 user = account_store().register(request.form.get("username", ""), password)
                 begin_session(user)
                 return redirect(url_for("auth.stations"), code=303)
             except ValueError as failure:
-                error, status = str(failure), 400
+                error, status = t(str(failure)), 400
     return render_template("auth.html", register=True, error=error), status
 
 
@@ -160,7 +161,7 @@ def stations():
     status = 200
     if request.method == "POST":
         if not current_app.extensions["auth_limiter"].allow(("claim", str(g.user["_id"])), 10, 900):
-            error, status = "Забагато спроб підключення. Повторіть через 15 хвилин.", 429
+            error, status = t("Забагато спроб підключення. Повторіть через 15 хвилин."), 429
         else:
             label = request.form.get("label", "").strip()
             pairing = (
@@ -174,7 +175,9 @@ def stations():
                 or device_id not in current_app.extensions["device_tokens"].values()
             ):
                 error, status = (
-                    "Перевірте назву та код підключення. Код діє 15 хвилин і використовується один раз.",
+                    t(
+                        "Перевірте назву та код підключення. Код діє 15 хвилин і використовується один раз."
+                    ),
                     400,
                 )
             else:
@@ -192,7 +195,7 @@ def stations():
                     session["station_id"] = str(station["_id"])
                     return redirect(url_for("index_page"), code=303)
                 except ValueError as failure:
-                    error, status = str(failure), 400
+                    error, status = t(str(failure)), 400
     return render_template("stations.html", error=error), status
 
 
@@ -200,7 +203,7 @@ def stations():
 def select_station():
     station = account_store().owned_station(request.form.get("station_id", ""), g.user["_id"])
     if not station:
-        return jsonify({"error": "Ця станція недоступна для вашого облікового запису."}), 403
+        return jsonify({"error": t("Ця станція недоступна для вашого облікового запису.")}), 403
     session["station_id"] = str(station["_id"])
     return redirect(url_for("index_page"), code=303)
 
@@ -209,7 +212,7 @@ def select_station():
 def disconnect_station():
     station_id = request.form.get("station_id", "")
     if not account_store().disconnect(station_id, g.user["_id"]):
-        return jsonify({"error": "Станція недоступна."}), 403
+        return jsonify({"error": t("Станція недоступна.")}), 403
     if session.get("station_id") == station_id:
         session.pop("station_id", None)
     return redirect(url_for("auth.stations"), code=303)
@@ -255,14 +258,14 @@ def install_authentication(app, database, tokens, legacy_configuration):
         public_auth = request.endpoint in {"auth.login", "auth.register"}
         if not g.user and not public_auth:
             if request.path.startswith("/api/"):
-                return jsonify({"error": "Увійдіть до свого облікового запису."}), 401
+                return jsonify({"error": t("Увійдіть до свого облікового запису.")}), 401
             return redirect(url_for("auth.login"))
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             received = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token", "")
             expected = session.get("csrf_token", "")
             if not expected or not hmac.compare_digest(expected.encode(), received.encode()):
                 if request.path.startswith("/api/"):
-                    return jsonify({"error": "Оновіть сторінку й повторіть дію."}), 400
+                    return jsonify({"error": t("Оновіть сторінку й повторіть дію.")}), 400
                 return render_template("auth_error.html"), 400
         if not g.user:
             return None
@@ -275,7 +278,7 @@ def install_authentication(app, database, tokens, legacy_configuration):
         account_route = request.endpoint is not None and request.endpoint.startswith("auth.")
         if not g.station and not account_route:
             if request.path.startswith("/api/"):
-                return jsonify({"error": "Спочатку підключіть власну станцію."}), 409
+                return jsonify({"error": t("Спочатку підключіть власну станцію.")}), 409
             return redirect(url_for("auth.stations"))
 
     @app.after_request

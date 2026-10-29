@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { METRICS, formatNumber, formatTimestamp, numberOrNull, parseTimestamp } from "./data.js";
 import { appendCells } from "./ui.js";
 
@@ -50,7 +51,7 @@ export function createTimeChart(container) {
         if (!values.length) {
             const empty = document.createElement("p");
             empty.className = "chart-empty";
-            empty.textContent = "За цей період немає вимірювань";
+            empty.textContent = t("За цей період немає вимірювань");
             container.append(empty);
             return;
         }
@@ -70,7 +71,10 @@ export function createTimeChart(container) {
         const chart = svgElement("svg", {
             viewBox: `0 0 ${width} ${height}`,
             role: "group",
-            "aria-label": `${definition.label}, ${definition.unit}. Стрілки перемикають точки.`,
+            "aria-label": t("{metric}, {unit}. Стрілки перемикають точки.", {
+                metric: definition.label,
+                unit: definition.unit,
+            }),
         });
         const tooltip = document.createElement("div");
         tooltip.className = "chart-tooltip";
@@ -214,12 +218,12 @@ export function createTimeChart(container) {
         const details = document.createElement("details");
         details.className = "chart-data";
         const summary = document.createElement("summary");
-        summary.textContent = "Значення графіка у таблиці";
+        summary.textContent = t("Значення графіка у таблиці");
         const scroll = document.createElement("div");
         scroll.className = "table-scroll";
         const table = document.createElement("table");
         const head = table.createTHead().insertRow();
-        appendCells(head, ["Час, Київ", `${definition.label}, ${definition.unit}`], true);
+        appendCells(head, [t("Час, Київ"), `${definition.label}, ${definition.unit}`], true);
         const body = table.createTBody();
         points.forEach((point) =>
             appendCells(body.insertRow(), [

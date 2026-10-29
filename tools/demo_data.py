@@ -11,6 +11,7 @@ from unittest.mock import patch
 import os
 import mongomock
 from accounts import AccountStore
+from i18n import t
 
 from weather_data import finite_number, parse_timestamp, rainfall_buckets
 
@@ -253,9 +254,9 @@ def load_demo_app():
                     "temperature": round(environment["temperature"] - 1.2, 1),
                     "humidity": 57,
                     "pressure": 1017,
-                    "description": "хмарно з проясненнями (демо)",
+                    "description": t("хмарно з проясненнями (демо)"),
                     "timestamp": latest["timestamp"],
-                    "location": "Львів · демонстраційне місце",
+                    "location": t("Львів · демонстраційне місце"),
                 }
             ),
             200,

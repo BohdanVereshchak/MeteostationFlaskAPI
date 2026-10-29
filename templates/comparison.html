@@ -1,45 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Два погляди на погоду{% endblock %}
+{% block title %}{{ t('Два погляди на погоду') }}{% endblock %}
 {% block page %}comparison{% endblock %}
 {% block content %}
     <div class="page-heading">
         <div>
-            <p class="section-label">Власний сенсор і зовнішнє джерело</p>
-            <h1>Два погляди на погоду</h1>
+            <p class="section-label">{{ t('Власний сенсор і зовнішнє джерело') }}</p>
+            <h1>{{ t('Два погляди на погоду') }}</h1>
         </div>
-        <button class="button" id="refresh">{{ icon('refresh-cw') }} Оновити</button>
+        <button class="button" id="refresh">{{ icon('refresh-cw') }} {{ t('Оновити') }}</button>
     </div>
     <p class="page-intro">
-        Зіставте локальні вимірювання з поточною погодою OpenWeather. Різниця допомагає помітити
-        особливості місця й умови встановлення сенсора.
+        {{ t('Зіставте локальні вимірювання з поточною погодою OpenWeather. Різниця допомагає помітити особливості місця й умови встановлення сенсора.') }}
     </p>
     <p id="page-message" class="notice" role="status" hidden></p>
     <div class="comparison-heading">
         <span class="connection-state" id="comparison-status" role="status">
-            Завантажуємо обидва джерела
+            {{ t('Завантажуємо обидва джерела') }}
         </span>
         <span id="comparison-location" class="muted"></span>
     </div>
     <section
         class="comparison-board"
-        aria-label="Зіставлення показників"
+        aria-label="{{ t('Зіставлення показників') }}"
         id="comparison-board"
         aria-busy="true"
     >
         <div class="comparison-column-labels">
-            <span>Показник</span>
-            <span>Ваша станція</span>
+            <span>{{ t('Показник') }}</span>
+            <span>{{ t('Ваша станція') }}</span>
             <span>OpenWeather</span>
-            <span>Різниця</span>
+            <span>{{ t('Різниця') }}</span>
         </div>
-        {% for key, label, unit, glyph in [('temperature', 'Температура', '°C', 'thermometer'), ('humidity', 'Вологість', '%', 'droplets'), ('pressure', 'Атмосферний тиск', 'гПа', 'gauge')] %}
+        {% for key, label, unit, glyph in [('temperature', t('Температура'), '°C', 'thermometer'), ('humidity', t('Вологість'), '%', 'droplets'), ('pressure', t('Атмосферний тиск'), t('гПа'), 'gauge')] %}
             <article class="comparison-row" data-comparison="{{ key }}">
                 <h2>
                     {{ icon(glyph) }} {{ label }}
                     <small>{{ unit }}</small>
                 </h2>
                 <div class="comparison-value">
-                    <span class="mobile-label">Ваша станція</span>
+                    <span class="mobile-label">{{ t('Ваша станція') }}</span>
                     <strong data-source="station">—</strong>
                 </div>
                 <div class="comparison-value reference-value">
@@ -47,7 +46,7 @@
                     <strong data-source="forecast">—</strong>
                 </div>
                 <div class="comparison-difference">
-                    <span class="mobile-label">Різниця</span>
+                    <span class="mobile-label">{{ t('Різниця') }}</span>
                     <span data-source="difference">—</span>
                     <div class="difference-track" aria-hidden="true"><i></i></div>
                 </div>
@@ -56,31 +55,29 @@
     </section>
     <div class="comparison-notes">
         <section>
-            <h2>Час має значення</h2>
+            <h2>{{ t('Час має значення') }}</h2>
             <dl class="timestamp-list">
                 <div>
-                    <dt>Спостереження станції</dt>
+                    <dt>{{ t('Спостереження станції') }}</dt>
                     <dd id="station-time">—</dd>
                 </div>
                 <div>
-                    <dt>Спостереження OpenWeather</dt>
+                    <dt>{{ t('Спостереження OpenWeather') }}</dt>
                     <dd id="reference-time">—</dd>
                 </div>
                 <div>
-                    <dt>Погода за джерелом</dt>
+                    <dt>{{ t('Погода за джерелом') }}</dt>
                     <dd id="reference-description">—</dd>
                 </div>
             </dl>
         </section>
         <section class="interpretation">
-            <h2>Різниця — не оцінка точності</h2>
+            <h2>{{ t('Різниця — не оцінка точності') }}</h2>
             <p>
-                Джерела можуть описувати різні висоти, точки й моменти часу. OpenWeather надає тиск,
-                приведений до рівня моря; локальний сенсор може вимірювати тиск на висоті станції.
+                {{ t('Джерела можуть описувати різні висоти, точки й моменти часу. OpenWeather надає тиск, приведений до рівня моря; локальний сенсор може вимірювати тиск на висоті станції.') }}
             </p>
             <p>
-                Порівнюйте тенденції та абсолютну різницю. Відсоток від температури у °C не є
-                коректною мірою точності.
+                {{ t('Порівнюйте тенденції та абсолютну різницю. Відсоток від температури у °C не є коректною мірою точності.') }}
             </p>
         </section>
     </div>

@@ -1,83 +1,81 @@
 {% extends "base.html" %}
-{% block title %}Архів спостережень{% endblock %}
+{% block title %}{{ t('Архів спостережень') }}{% endblock %}
 {% block page %}history{% endblock %}
 {% block content %}
     <div class="page-heading">
         <div>
-            <p class="section-label">Погода залишає слід</p>
-            <h1>Архів спостережень</h1>
+            <p class="section-label">{{ t('Погода залишає слід') }}</p>
+            <h1>{{ t('Архів спостережень') }}</h1>
         </div>
-        <button class="button" id="export" disabled>{{ icon('download') }} Експорт CSV</button>
+        <button class="button" id="export" disabled>{{ icon('download') }} {{ t('Експорт CSV') }}</button>
     </div>
     <p class="page-intro">
-        Знайдіть зміни за годинами, днями й тижнями. Усі графіки побудовано з вимірювань вашої
-        станції.
+        {{ t('Знайдіть зміни за годинами, днями й тижнями. Усі графіки побудовано з вимірювань вашої станції.') }}
     </p>
     <p id="page-message" class="notice" role="status" hidden></p>
-    <section class="archive-panel" aria-label="Графік архіву">
+    <section class="archive-panel" aria-label="{{ t('Графік архіву') }}">
         <div class="archive-toolbar">
-            <div class="segment-control" id="history-metrics" aria-label="Показник на графіку">
-                <button data-metric="temperature" aria-pressed="true">Температура</button>
-                <button data-metric="humidity" aria-pressed="false">Вологість</button>
-                <button data-metric="pressure" aria-pressed="false">Тиск</button>
+            <div class="segment-control" id="history-metrics" aria-label="{{ t('Показник на графіку') }}">
+                <button data-metric="temperature" aria-pressed="true">{{ t('Температура') }}</button>
+                <button data-metric="humidity" aria-pressed="false">{{ t('Вологість') }}</button>
+                <button data-metric="pressure" aria-pressed="false">{{ t('Тиск') }}</button>
                 <button data-metric="eco2" aria-pressed="false">eCO₂</button>
             </div>
             <label class="select-label" for="history-period">
-                Період
+                {{ t('Період') }}
                 <select id="history-period">
-                    <option value="24">Остання доба</option>
-                    <option value="168">7 днів</option>
-                    <option value="720">30 днів</option>
+                    <option value="24">{{ t('Остання доба') }}</option>
+                    <option value="168">{{ t('7 днів') }}</option>
+                    <option value="720">{{ t('30 днів') }}</option>
                 </select>
             </label>
         </div>
         <dl class="archive-summary">
             <div>
-                <dt>Середня температура</dt>
+                <dt>{{ t('Середня температура') }}</dt>
                 <dd>
                     <span id="summary-average">—</span>
                     <small>°C</small>
                 </dd>
             </div>
             <div>
-                <dt>Мінімум</dt>
+                <dt>{{ t('Мінімум') }}</dt>
                 <dd>
                     <span id="summary-minimum">—</span>
                     <small>°C</small>
                 </dd>
             </div>
             <div>
-                <dt>Максимум</dt>
+                <dt>{{ t('Максимум') }}</dt>
                 <dd>
                     <span id="summary-maximum">—</span>
                     <small>°C</small>
                 </dd>
             </div>
             <div>
-                <dt>Отримано записів</dt>
+                <dt>{{ t('Отримано записів') }}</dt>
                 <dd id="summary-count">—</dd>
             </div>
         </dl>
         <div class="time-chart time-chart-large" id="history-chart"></div>
         <p class="chart-caption" id="history-caption">
-            Графік показує усереднені значення. Нижче — останні 100 окремих вимірювань за вибраний
-            період.
+            {{ t('Графік показує усереднені значення. Нижче — останні 100 окремих вимірювань за вибраний період.') }}
         </p>
     </section>
     <section class="history-log" aria-labelledby="log-heading">
         <div class="panel-heading">
-            <h2 id="log-heading">Журнал вимірювань</h2>
-            <span class="muted" id="log-count">Очікуємо дані</span>
+            <h2 id="log-heading">{{ t('Журнал вимірювань') }}</h2>
+            <span class="muted" id="log-count">{{ t('Очікуємо дані') }}</span>
         </div>
-        <div class="table-scroll" role="region" aria-label="Окремі вимірювання" tabindex="0">
+        <div class="table-scroll" role="region" aria-label="{{ t('Окремі вимірювання') }}" tabindex="0">
             <table>
-                <caption class="sr-only">Останні вимірювання у київському часі</caption>
+                <caption class="sr-only">{{ t('Останні вимірювання у київському часі') }}</caption>
                 <thead>
                     <tr>
-                        <th scope="col">Час спостереження</th>
-                        <th scope="col">Температура, °C</th>
-                        <th scope="col">Вологість, %</th>
-                        <th scope="col">Тиск, гПа</th>
+                        <th scope="col">{{ t('Час спостереження') }}</th>
+                        <th scope="col">{{ t('Температура, °C') }}</th>
+                        <th scope="col">{{ t('Вологість, %') }}</th>
+                        <th scope="col">{{ t('Тиск, гПа') }}</th>
                         <th scope="col">eCO₂, ppm</th>
                         <th scope="col">TVOC, ppb</th>
                         <th scope="col">AQI</th>
@@ -85,7 +83,7 @@
                 </thead>
                 <tbody id="history-rows">
                     <tr>
-                        <td colspan="7">Завантажуємо журнал…</td>
+                        <td colspan="7">{{ t('Завантажуємо журнал…') }}</td>
                     </tr>
                 </tbody>
             </table>

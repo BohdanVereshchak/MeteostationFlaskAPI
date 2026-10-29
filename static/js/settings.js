@@ -1,3 +1,4 @@
+import { t, language } from "./i18n.js";
 import { configurationFromForm, numberOrNull } from "./data.js";
 import { requestJSON, setBusy, setText, showNotice } from "./ui.js";
 
@@ -43,15 +44,15 @@ export function initialize() {
         try {
             savedConfiguration = await requestJSON("/api/config");
             populate(savedConfiguration);
-            setSaveStatus("Поточні налаштування завантажено");
+            setSaveStatus(t("Поточні налаштування завантажено"));
         } catch (error) {
             if (error.status === 404) {
                 savedConfiguration = {};
                 populate({});
-                setSaveStatus("Налаштуйте станцію вперше");
+                setSaveStatus(t("Налаштуйте станцію вперше"));
             } else {
                 showNotice(error.message);
-                setSaveStatus("Не вдалося завантажити конфігурацію. Оновіть сторінку.", "error");
+                setSaveStatus(t("Не вдалося завантажити конфігурацію. Оновіть сторінку."), "error");
                 return;
             }
         }
@@ -62,16 +63,16 @@ export function initialize() {
     async function searchLocation() {
         const query = searchInput.value.trim();
         if (query.length < 2) {
-            results.textContent = "Введіть щонайменше дві літери.";
+            results.textContent = t("Введіть щонайменше дві літери.");
             return;
         }
         setBusy(searchButton, true);
-        results.textContent = "Шукаємо населений пункт…";
+        results.textContent = t("Шукаємо населений пункт…");
         try {
             const parameters = new URLSearchParams({
                 name: query,
                 count: 4,
-                language: "uk",
+                language,
                 format: "json",
             });
             const data = await requestJSON(
@@ -79,8 +80,9 @@ export function initialize() {
             );
             results.replaceChildren();
             if (!data.results?.length) {
-                results.textContent =
-                    "Нічого не знайдено. Введіть іншу назву або координати вручну.";
+                results.textContent = t(
+                    "Нічого не знайдено. Введіть іншу назву або координати вручну.",
+                );
                 return;
             }
             for (const location of data.results) {
@@ -92,14 +94,19 @@ export function initialize() {
                 button.addEventListener("click", () => {
                     document.getElementById("latitude").value = location.latitude;
                     document.getElementById("longitude").value = location.longitude;
-                    results.textContent = `Вибрано: ${button.textContent}. Збережіть налаштування, щоб застосувати координати.`;
-                    setSaveStatus("Є незбережені зміни");
+                    results.textContent = t(
+                        "Вибрано: {place}. Збережіть налаштування, щоб застосувати координати.",
+                        { place: button.textContent },
+                    );
+                    setSaveStatus(t("Є незбережені зміни"));
                     document.getElementById("latitude").focus();
                 });
                 results.append(button);
             }
         } catch (error) {
-            results.textContent = `${error.message} Координати можна ввести вручну.`;
+            results.textContent = t("{error} Координати можна ввести вручну.", {
+                error: error.message,
+            });
         } finally {
             setBusy(searchButton, false);
         }
@@ -115,11 +122,11 @@ export function initialize() {
                 Math.min(86400, (numberOrNull(interval.value) ?? 60) + Number(button.dataset.step)),
             );
         updatePresets();
-        setSaveStatus("Є незбережені зміни");
+        setSaveStatus(t("Є незбережені зміни"));
     });
     form.addEventListener("input", () => {
         updatePresets();
-        setSaveStatus("Є незбережені зміни");
+        setSaveStatus(t("Є незбережені зміни"));
     });
     form.addEventListener("reset", (event) => {
         event.preventDefault();
@@ -127,7 +134,7 @@ export function initialize() {
         populate(savedConfiguration);
         results.replaceChildren();
         searchInput.value = "";
-        setSaveStatus("Зміни скасовано");
+        setSaveStatus(t("Зміни скасовано"));
     });
     searchButton.addEventListener("click", searchLocation);
     searchInput.addEventListener("keydown", (event) => {
@@ -152,7 +159,7 @@ export function initialize() {
         form.querySelectorAll("fieldset").forEach((fieldset) => {
             fieldset.disabled = true;
         });
-        setSaveStatus("Зберігаємо налаштування…");
+        setSaveStatus(t("Зберігаємо налаштування…"));
         try {
             await requestJSON("/api/config", {
                 method: "POST",
@@ -160,7 +167,7 @@ export function initialize() {
                 body: JSON.stringify(configuration),
             });
             savedConfiguration = configuration;
-            setSaveStatus("Налаштування збережено");
+            setSaveStatus(t("Налаштування збережено"));
         } catch (error) {
             setSaveStatus(error.message, "error");
         } finally {

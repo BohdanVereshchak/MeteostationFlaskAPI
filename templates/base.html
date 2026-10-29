@@ -3,8 +3,14 @@
         <use href="{{ url_for('static', filename='icons.svg') }}#{{ name }}"></use>
     </svg>
 {%- endmacro %}
+{% macro language_switch() -%}
+    <nav class="language-switch" aria-label="{{ t('Мова інтерфейсу') }}">
+        <a href="{{ language_url('en') }}" lang="en" {% if language == 'en' %}aria-current="true"{% endif %}>EN</a>
+        <a href="{{ language_url('uk') }}" lang="uk" {% if language == 'uk' %}aria-current="true"{% endif %}>УК</a>
+    </nav>
+{%- endmacro %}
 <!doctype html>
-<html lang="uk">
+<html lang="{{ language }}">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,9 +18,9 @@
         <meta name="csrf-token" content="{{ csrf_token() }}" />
         <meta
             name="description"
-            content="Власна метеостанція: поточні вимірювання, історія та стан повітря."
+            content="{{ t('Власна метеостанція: поточні вимірювання, історія та стан повітря.') }}"
         />
-        <title>{% block title %}Метеостанція{% endblock %} — Meteo</title>
+        <title>{% block title %}{{ t('Метеостанція') }}{% endblock %} — Meteo</title>
         <link
             rel="icon"
             href="{{ url_for('static', filename='favicon.svg') }}"
@@ -28,16 +34,17 @@
             crossorigin
         />
         <link rel="stylesheet" href="{{ url_for('static', filename='css/station.css') }}" />
+        <script id="translation-messages" type="application/json">{{ translation_messages | tojson }}</script>
         <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
     </head>
     <body data-page="{% block page %}overview{% endblock %}">
-        <a class="skip-link" href="#main">До вмісту</a>
+        <a class="skip-link" href="#main">{{ t('До вмісту') }}</a>
         <header class="site-header">
             <div class="header-inner">
                 <a
                     class="brand"
                     href="{{ url_for('index_page') }}"
-                    aria-label="Meteo — огляд станції"
+                    aria-label="{{ t('Meteo — огляд станції') }}"
                 >
                     {{ icon('waves') }}
                     <span>
@@ -46,8 +53,8 @@
                     </span>
                 </a>
                 {% if g.user %}
-                    <nav class="primary-nav" aria-label="Головна навігація">
-                        {% for endpoint, label in [('index_page', 'Огляд'), ('history_page', 'Архів'), ('comparison_page', 'Зіставлення'), ('settings_page', 'Станція')] %}
+                    <nav class="primary-nav" aria-label="{{ t('Головна навігація') }}">
+                        {% for endpoint, label in [('index_page', t('Огляд')), ('history_page', t('Архів')), ('comparison_page', t('Зіставлення')), ('settings_page', t('Станція'))] %}
                             <a
                                 href="{{ url_for(endpoint) }}"
                                 {% if request.endpoint == endpoint or (endpoint == 'index_page' and request.endpoint == 'main_page') %}aria-current="page"{% endif %}
@@ -65,7 +72,7 @@
                             >
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                                 <label class="sr-only" for="selected-station">
-                                    Поточна станція
+                                    {{ t('Поточна станція') }}
                                 </label>
                                 <select id="selected-station" name="station_id">
                                     {% for station in g.stations %}
@@ -77,7 +84,7 @@
                                         </option>
                                     {% endfor %}
                                 </select>
-                                <noscript><button type="submit">Обрати</button></noscript>
+                                <noscript><button type="submit">{{ t('Обрати') }}</button></noscript>
                             </form>
                         {% endif %}
                         <details class="account-menu">
@@ -85,14 +92,15 @@
                                 {{ g.user.username }} {{ icon('sliders-horizontal') }}
                             </summary>
                             <div>
-                                <a href="{{ url_for('auth.stations') }}">Мої станції</a>
+                                <a href="{{ url_for('auth.stations') }}">{{ t('Мої станції') }}</a>
+                                <div class="account-language"><span>{{ t('Мова') }}</span>{{ language_switch() }}</div>
                                 <form method="post" action="{{ url_for('auth.logout') }}">
                                     <input
                                         type="hidden"
                                         name="csrf_token"
                                         value="{{ csrf_token() }}"
                                     />
-                                    <button type="submit">Вийти</button>
+                                    <button type="submit">{{ t('Вийти') }}</button>
                                 </form>
                             </div>
                         </details>
@@ -102,29 +110,30 @@
                         class="anonymous-link"
                         href="{{ url_for('auth.register' if not register else 'auth.login') }}"
                     >
-                        {{ 'Створити обліковий запис' if not register else 'Увійти' }}
+                        {{ t('Створити обліковий запис') if not register else t('Увійти') }}
                     </a>
+                    {{ language_switch() }}
                 {% endif %}
             </div>
         </header>
         {% if preview_mode %}
             <div class="preview-banner">
-                Демонстраційні вимірювання · ізольований перегляд без підключення до вашої станції
+                {{ t('Демонстраційні вимірювання · ізольований перегляд без підключення до вашої станції') }}
             </div>
         {% endif %}
         <main id="main" class="page-shell">{% block content %}{% endblock %}</main>
         <footer class="site-footer">
-            <span>Велика погода. Власні спостереження.</span>
+            <span>{{ t('Велика погода. Власні спостереження.') }}</span>
             <span>
-                Час: Київ
+                {{ t('Час: Київ') }}
                 <span aria-hidden="true">/</span>
                 Europe/Kyiv
             </span>
         </footer>
         <noscript>
             <p class="page-shell notice">
-                Увімкніть JavaScript для завантаження вимірювань.
-                <a href="/api/data">Дані у форматі JSON</a>
+                {{ t('Увімкніть JavaScript для завантаження вимірювань.') }}
+                <a href="/api/data">{{ t('Дані у форматі JSON') }}</a>
                 .
             </p>
         </noscript>
