@@ -1,16 +1,12 @@
-# Use Python base image
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your files
 COPY . .
+RUN cp config/config_db.example.py config/config_db.py
 
-# Install dependencies
-RUN pip install -r requirements.txt
-
-# Expose port 8080 (Cloud Run default)
+ENV PORT=8080
 EXPOSE 8080
-
-# Start your Flask app
 CMD ["python", "app.py"]

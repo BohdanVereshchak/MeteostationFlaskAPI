@@ -4,9 +4,69 @@ A Flask/MongoDB application for an ESP32 weather station. The station collects
 measurements and sends signed JSON. This application stores them and provides a
 Ukrainian dashboard, history, rainfall analysis, and an OpenWeather comparison.
 
+![Meteo dashboard with sample readings](docs/screenshots/overview.jpg)
+
 The Summer Ocean Breeze interface uses honeydew, frosted blue, cerulean, oxford
 navy, and punch red. Fonts and icons are served locally. There is no frontend
 framework, build step, CDN dependency, or charting dependency.
+
+## Accounts and station connection
+
+Create a username/password account at `/register`. Each account sees only its
+connected stations. Every readings and settings route enforces the selected
+station's ownership on the server; changing a URL or form value cannot grant
+access to another account's station.
+
+A server operator approves connection with a one-time pairing code:
+
+```powershell
+python -m tools.pair_station --device-id YOUR_DEVICE_ID
+```
+
+The device ID must exist in `AUTHORIZED_TOKENS`. Give the printed code privately
+to its owner, who enters it on **My stations** (`/web/stations`). Codes expire
+within 15 minutes, are stored as hashes, and can be redeemed once. Issuing a new
+code invalidates the previous one for that device. A bound station must first be
+disconnected by its owner before a new pairing code can be issued.
+
+The switcher in the header changes the active station. Disconnecting retains its
+measurements and configuration; reconnecting needs a fresh operator code. A new owner receives access to that station’s retained archive. The
+browser never needs the ESP32's long-lived upload token.
+
+Existing ESP32 upload signatures and token-bearing configuration requests remain
+compatible. The inspected firmware already sends `Authorization` to `/api/config`.
+Unpaired devices continue to receive the legacy configuration. After pairing,
+configuration and alert thresholds are stored independently per station.
+
+Old readings without a device ID are included only when the server has exactly
+one configured device when it is first connected. With several configured
+devices, unassigned legacy rows are not silently assigned to an arbitrary owner.
+Plan an explicit migration if you need to attribute them.
+
+### Sessions and deployment
+
+Passwords use Werkzeug's scrypt hashing. Browser writes use session-bound CSRF
+codes, including login, logout, settings, and station connection. Sessions last
+12 hours, use HttpOnly/SameSite=Lax cookies, and rotate at login. Failed logins,
+registration, and pairing attempts have per-process request limits.
+
+HTTPS cookies are the default. For local HTTP development, set
+`$env:METEO_COOKIE_SECURE = '0'` before starting the app. For production, keep
+secure cookies enabled and provide a random `METEO_SESSION_SECRET` of at least
+32 characters in the process environment. Without that variable, the app creates
+an ignored `.session-secret` file; preserve it across restarts. Multiple instances
+must share one session secret. Place a shared rate limit at the hosting edge if
+running multiple processes or instances.
+
+MongoDB needs read/write and index permissions for `meteo_users`,
+`meteo_stations`, and `meteo_pairing_codes`, as well as the existing collections.
+Unique indexes protect usernames and station ownership; pairing codes have a TTL
+index in addition to explicit expiry checks. No old readings are rewritten.
+
+Accounts currently use usernames and passwords; email verification and automated
+password recovery are not implemented. Previously committed device secrets must
+be rotated before relying on them again: removing Git paths does not revoke a
+credential or erase copies elsewhere. Keep the pre-cleanup Git backup private.
 
 ## What the interface does
 
@@ -50,20 +110,24 @@ The default address is `http://localhost:5000/web`. The `PORT` environment varia
 can override the default. Other pages are `/web/history`, `/web/comparison`, and
 `/web/settings`. Waitress serves the application; Flask's debugger is not enabled.
 
-The existing settings API has no administrator login. Run it behind an access
-policy or on a trusted network when configuration changes must be restricted.
-This redesign preserves that existing access model.
+Browser data and configuration routes require an account with an owned station.
+Device uploads still use the original authorization token and HMAC signature.
 
 ## Preview without a station or database
 
 ```powershell
+python -m pip install -r requirements-dev.txt
 python -m tools.preview
 ```
 
 Visit `http://localhost:4302/web`. A visible banner identifies the sample data.
 This tool replaces the database and external-weather boundary in memory before
 loading the real routes. It never imports private configuration or connects to
-MongoDB. Saving settings changes only the preview's memory.
+MongoDB. Saving settings changes only the preview's memory. Sign in as `observer` with
+password `ocean-breeze-demo` to inspect two sample stations. The station page
+shows a sample pairing code for a third, unclaimed device so you can try account
+registration and connection. Restart the preview to issue a fresh demo pairing code. These credentials and codes exist only in the
+explicit preview tool, never in the production application.
 
 ## Tests
 
@@ -97,7 +161,7 @@ There are roughly 240 chart buckets per window, rather than every raw record.
 Rainfall routes now return `rainfall_mm: null` and `complete: false` when an
 interval lacks sufficient coverage or contains a counter reset. Consumers must
 distinguish unknown from zero. Hourly queries are limited to 1–168 hours.
-Configuration updates validate known fields and preserve unedited nested fields.
+Configuration updates require ownership and a valid CSRF code; they validate known fields and preserve unedited nested fields.
 `/api/data/stats` and `/api/data/all` remain legacy routes; the new UI uses the
 bounded history route instead.
 
@@ -120,8 +184,24 @@ bounded history route instead.
 - Golos Text is from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/golostext)
   (OFL). Icons are [Lucide](https://lucide.dev/) (ISC). Notices are in `static/licenses/`.
 
-No database migration or new indexes are applied automatically. The compatibility
-queries normalize stored strings inside MongoDB; the history range first narrows
+No migration rewrites existing sensor records. Account features create their own
+unique and TTL indexes when first used. The compatibility queries normalize stored
+strings inside MongoDB; the history range first narrows
 the string dates. For a larger archive, a separately planned migration to an
 indexed BSON date field will make chronological queries cheaper. Do not migrate
 production timestamps without a backup and a compatibility plan for the device.
+
+## Docker
+
+The image excludes local keys, private configuration, Git metadata, and virtual
+environments. It creates the configuration adapter from the tracked example;
+provide real values at runtime rather than copying secrets into the image.
+
+```powershell
+docker build -t meteostation .
+docker run --env-file secrets.env -e METEO_SESSION_SECRET -p 8080:8080 meteostation
+```
+
+Set `METEO_SESSION_SECRET` in your shell before this command. For an HTTP-only
+local container, additionally pass `-e METEO_COOKIE_SECURE=0`; keep HTTPS-only
+cookies in deployment. No hosting service is deployed by these source changes.

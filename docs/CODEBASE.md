@@ -24,6 +24,8 @@ Browser ← page module ← JSON ← weather_data.py
 | File | Responsibility |
 | --- | --- |
 | `app.py` | Flask setup, HTTP routes, upload authentication, external-weather calls |
+| `accounts.py` | User hashes, station ownership, per-device settings, one-time pairing codes |
+| `auth.py` | Session/CSRF boundaries, account routes, station selection, scoped request context |
 | `weather_data.py` | Query building, timestamp normalization, rainfall logic, configuration validation |
 | `templates/base.html` | Shared document, navigation, icon macro, footer |
 | `templates/index.html` | Current observation, daily trend, rainfall, air readings |
@@ -90,3 +92,33 @@ endpoint or save test settings against production.
 Configuration and private keys stay local. Ignoring or untracking an existing
 file does not remove earlier commits; rotate exposed credentials and review
 repository history separately before distributing it.
+
+## Follow an authenticated request
+
+`install_authentication()` installs a request guard. It resolves the session's
+user ID, loads only stations owned by that user, and resolves the selected station
+again on the server. It rejects anonymous API reads and browser writes without a
+matching CSRF code. The template receives `g.user`, `g.stations`, and `g.station`;
+no password hash or device token is put into the session cookie.
+
+A chart route calls `active_data_filter()` and passes that filter to the query
+helper. The filter goes at the beginning of every aggregation, before summaries
+or rainfall baselines are calculated. Filtering the final display would be too
+late: aggregates could already contain another device's readings.
+
+Device requests take a separate path. A signed upload maps its token to the
+configured device ID, ignoring any claimed ID in the payload. Token-bearing
+configuration requests read that device's settings. They do not acquire a
+browser session and cannot read the browser's historical-data endpoints.
+
+The operator's pairing tool issues a random 128-bit code, stores only its digest
+and expiry, and reveals the code once. Redemption uses MongoDB's atomic
+`find_one_and_delete()`, so only one claimant can consume it. A unique device ID
+index still prevents a concurrent claim from replacing an existing owner. If a
+server error interrupts connection after consumption, issue a fresh code; do not
+make a consumed code reusable.
+
+The indexes are additive. Tests use `mongomock` for account persistence and
+explicitly replace sensor-query boundaries in the preview. Production never
+imports the preview account or sample readings. The original station data remains
+in its existing collection; ownership is represented in separate collections.
