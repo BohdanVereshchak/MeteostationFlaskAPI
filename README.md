@@ -1,101 +1,127 @@
-# Weather Station Web Interface
+# Meteo · a personal weather station
 
-A Flask-based web application that provides a real-time interface for weather station data with MongoDB integration and OpenWeather API comparison features.
+A Flask/MongoDB application for an ESP32 weather station. The station collects
+measurements and sends signed JSON. This application stores them and provides a
+Ukrainian dashboard, history, rainfall analysis, and an OpenWeather comparison.
 
-## Features
+The Summer Ocean Breeze interface uses honeydew, frosted blue, cerulean, oxford
+navy, and punch red. Fonts and icons are served locally. There is no frontend
+framework, build step, CDN dependency, or charting dependency.
 
-- Real-time weather data display using WebSocket
-- Historical data visualization
-- Weather data comparison with OpenWeather API
-- Configurable alert system for temperature and humidity thresholds
-- Rainfall tracking and analysis
-- Responsive web interface
+## What the interface does
 
-## Prerequisites
+- **Overview:** latest local readings, explicit data age, a 24-hour temperature,
+  humidity or pressure chart, hourly rainfall, and the device's air readings.
+- **Archive:** 1-, 7-, and 30-day windows, chart metric selection, temperature
+  statistics, and a journal of the latest 100 records in the selected window.
+  CSV exports those journal records, with UTC timestamps and units in headings.
+- **Comparison:** station readings beside OpenWeather **current conditions**,
+  absolute differences, and the observation time of each source. It does not
+  present the difference as a forecast-accuracy score.
+- **Station:** reporting interval, coordinate search or manual coordinates,
+  nullable temperature/humidity limits, validation, save, and discard changes.
 
-- Python 3.12 or newer
-- MongoDB database
-- OpenWeather API key (for forecast comparison)
+Charts work with pointer, touch, and keyboard. Focus a chart and use Left/Right,
+Home, or End to inspect points. A table alternative accompanies every line chart.
+Reduced-motion preferences disable animated transitions.
 
-## Installation
+## Run locally
 
-1. Clone the repository:
-```bash
-git clone https://github.com/BogdanVereshchak/MeteostationFlaskAPI.git
-cd MeteostationFlaskAPI
-```
+Python 3.11 or newer is supported. Node 18+ is optional, for JavaScript tests only.
 
-2. Create and activate a virtual environment:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-3. Install the required dependencies:
-```powershell
-python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+Copy-Item config/config_db.example.py config/config_db.py
+Copy-Item .env.example secrets.env
 ```
 
-## Configuration
+Fill `secrets.env` with your MongoDB settings and device credentials, and add an
+OpenWeather key if you want external comparison. Existing installations can keep
+their current `config/config_db.py`; the redesign does not replace that file.
+Keep the HMAC secret and authorization token identical to the ESP32's values.
 
-1. Create a `config/config_db.py` file with your MongoDB credentials and OpenWeather API settings:
-```python
-MONGO_URI = "your_mongodb_connection_string"
-DB_NAME = "your_database_name"
-COLLECTION_NAME = "weather_data"
-CONFIG_NAME = "config"
-
-# OpenWeather API configuration
-OPENWEATHER_API_KEY = "your_api_key"
-WEATHER_LOCATION_LAT = your_latitude
-WEATHER_LOCATION_LON = your_longitude
-```
-
-## Usage
-
-1. Start the Flask application:
 ```powershell
 python app.py
 ```
 
-2. Access the web interface at:
-- Main interface: `http://localhost:3000/`
-- History page: `http://localhost:3000/web/history`
-- Settings page: `http://localhost:3000/web/settings`
-- Comparison page: `http://localhost:3000/web/comparison`
+The default address is `http://localhost:5000/web`. The `PORT` environment variable
+can override the default. Other pages are `/web/history`, `/web/comparison`, and
+`/web/settings`. Waitress serves the application; Flask's debugger is not enabled.
 
-## API Endpoints
+The existing settings API has no administrator login. Run it behind an access
+policy or on a trusted network when configuration changes must be restricted.
+This redesign preserves that existing access model.
 
-- `/api/data` - POST: Submit weather station data, GET: Retrieve recent data
-- `/api/data/all` - GET: Retrieve all historical data
-- `/api/data/stats` - GET: Get statistical data with rainfall analysis
-- `/api/weather/forecast` - GET: Fetch current weather from OpenWeather API
-- `/api/weather/comparison` - GET: Compare station data with forecast
-- `/api/config` - GET/POST: Manage alert thresholds and system configuration
+## Preview without a station or database
 
-## Project Structure
-
-```
-IS_project/
-├── app.py                # Main Flask application
-├── requirements.txt      # Python dependencies
-├── .venv/               # Virtual environment (ignored in Git)
-├── config/
-│   └── config_db.py     # Database configuration
-├── templates/           # HTML templates
-├── static/             # CSS/JS files
-└── README.md
+```powershell
+python -m tools.preview
 ```
 
-## License
+Visit `http://localhost:4302/web`. A visible banner identifies the sample data.
+This tool replaces the database and external-weather boundary in memory before
+loading the real routes. It never imports private configuration or connects to
+MongoDB. Saving settings changes only the preview's memory.
 
-[MIT License](LICENSE)
+## Tests
 
-## Contributing
+```powershell
+python -m unittest discover -s tests -v
+npm test
+npm run check
+```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Python tests cover timestamps, rainfall resets/gaps, configuration validation,
+bounded query construction, rendering, and signed/unsigned device uploads.
+JavaScript tests cover formatting, data freshness, zero values, form conversion,
+and CSV output. They require no live services. Query-builder tests use a mock
+collection; they do not replace testing aggregation support on your MongoDB.
+
+## Read the code
+
+Start with [the codebase guide](docs/CODEBASE.md). It explains how a reading moves
+from the ESP32 to the screen, each module's responsibility, and where to make
+common changes. [CONTRIBUTING.md](CONTRIBUTING.md) records the readability standard.
+
+## API compatibility
+
+The ESP32's `POST /api/data` body, `Authorization` header, and `X-Signature` HMAC
+verification remain the same. Existing page URLs and data routes remain available.
+
+The dashboard adds `GET /api/data/history?hours=24` (1–720 hours). It returns
+time-bucket averages, temperature statistics, and at most 100 recent raw readings.
+There are roughly 240 chart buckets per window, rather than every raw record.
+
+Rainfall routes now return `rainfall_mm: null` and `complete: false` when an
+interval lacks sufficient coverage or contains a counter reset. Consumers must
+distinguish unknown from zero. Hourly queries are limited to 1–168 hours.
+Configuration updates validate known fields and preserve unedited nested fields.
+`/api/data/stats` and `/api/data/all` remain legacy routes; the new UI uses the
+bounded history route instead.
+
+## Data and external sources
+
+- Naive legacy timestamps are interpreted as UTC; explicit offsets are honored.
+  The interface displays Europe/Kyiv time, including daylight-saving changes.
+- Rainfall keeps the existing calibration: **0.987 mm per tip**. Adjacent counter
+  differences are assigned to the later observation's hourly bucket. An interval
+  needs a recent baseline and endpoint, no reset, and no gap longer than the
+  larger of ten minutes or three configured reporting intervals. The open current
+  hour is marked incomplete. Unknown hours are excluded from the displayed sum.
+- eCO₂ is shown as a sensor estimate. The device's AQI is not relabelled as a
+  standardized regional health index.
+- [OpenWeather current conditions](https://openweathermap.org/current) supplies
+  external comparison. Its sea-level pressure may differ from local pressure.
+- Optional place search uses [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api),
+  with location data from GeoNames. Only an explicit search sends the entered
+  place name; entering coordinates works without this service.
+- Golos Text is from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/golostext)
+  (OFL). Icons are [Lucide](https://lucide.dev/) (ISC). Notices are in `static/licenses/`.
+
+No database migration or new indexes are applied automatically. The compatibility
+queries normalize stored strings inside MongoDB; the history range first narrows
+the string dates. For a larger archive, a separately planned migration to an
+indexed BSON date field will make chronological queries cheaper. Do not migrate
+production timestamps without a backup and a compatibility plan for the device.
