@@ -4,6 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from bson import ObjectId
 from pymongo.errors import ServerSelectionTimeoutError
 from tools.demo_data import load_demo_app
 
@@ -13,6 +14,11 @@ class RouteTests(unittest.TestCase):
     def setUpClass(cls):
         cls.module = load_demo_app()
         cls.client = cls.module.app.test_client()
+        cls.client.environ_base["HTTP_X_CSRF_TOKEN"] = "route-test-csrf"
+        with cls.client.session_transaction() as session:
+            session["user_id"] = cls.module.demo_user_id
+            session["station_id"] = cls.module.demo_station_id
+            session["csrf_token"] = "route-test-csrf"
 
     def test_pages_render_without_external_ui_dependencies(self):
         for path in ["/", "/web", "/web/history", "/web/settings", "/web/comparison"]:
@@ -47,6 +53,19 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(len(self.module.collection.readings), count)
 
+    def test_signed_invalid_shapes_are_rejected_without_storing_records(self):
+        count = len(self.module.collection.readings)
+        for payload in [[], {"environment": None}, {"rainfall": []}, {"timestamp": "invalid"}]:
+            raw = json.dumps(payload).encode()
+            signature = hmac.new(b"local-demo-only", raw, hashlib.sha256).hexdigest()
+            response = self.client.post(
+                "/api/data",
+                data=raw,
+                headers={"Authorization": "demo-token", "X-Signature": signature},
+            )
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(self.module.collection.readings), count)
+
     def test_history_and_rainfall_inputs_are_bounded(self):
         for query in ["hours=0", "hours=721", "hours=abc"]:
             self.assertEqual(self.client.get("/api/data/history?" + query).status_code, 400)
@@ -54,7 +73,10 @@ class RouteTests(unittest.TestCase):
             self.assertEqual(self.client.get("/api/data/hourly_rainfall?" + query).status_code, 400)
 
     def test_configuration_partial_updates_keep_unedited_device_fields(self):
-        self.module.config.value["system"]["sensor_mode"] = "existing"
+        self.module.app.extensions["accounts"].stations.update_one(
+            {"_id": ObjectId(self.module.demo_station_id)},
+            {"$set": {"settings.system.sensor_mode": "existing"}},
+        )
         response = self.client.post(
             "/api/config",
             json={
@@ -68,10 +90,10 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(configuration["location"]["latitude"], 0)
 
     def test_invalid_settings_do_not_write_configuration(self):
-        before = self.module.config.find_one()
+        before = self.client.get("/api/config").json
         response = self.client.post("/api/config", json={"temperature": {"min": 30, "max": 20}})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(before, self.module.config.find_one())
+        self.assertEqual(before, self.client.get("/api/config").json)
 
     def test_database_error_returns_actionable_json_without_connection_details(self):
         with patch.object(

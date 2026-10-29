@@ -8,6 +8,9 @@ from pathlib import Path
 import sys
 from types import ModuleType
 from unittest.mock import patch
+import os
+import mongomock
+from accounts import AccountStore
 
 from weather_data import finite_number, parse_timestamp, rainfall_buckets
 
@@ -30,12 +33,55 @@ class MemoryConfiguration:
             self.value.setdefault(section, {})[name] = value
 
 
+def matches(record, query):
+    if not query:
+        return True
+    for key, value in query.items():
+        if key == "$or":
+            if not any(matches(record, child) for child in value):
+                return False
+        elif key == "$and":
+            if not all(matches(record, child) for child in value):
+                return False
+        elif isinstance(value, dict):
+            if "$exists" in value and (key in record) != value["$exists"]:
+                return False
+            if "$lte" in value and record.get(key, "") > value["$lte"]:
+                return False
+        elif record.get(key) != value:
+            return False
+    return True
+
+
+class MemoryCursor(list):
+    def sort(self, key, direction):
+        return MemoryCursor(
+            sorted(self, key=lambda record: record.get(key, ""), reverse=direction < 0)
+        )
+
+    def limit(self, count):
+        return MemoryCursor(self[:count])
+
+
 class MemoryReadings:
     def __init__(self, readings):
         self.readings = readings
 
+    def find(self, query, *args):
+        return MemoryCursor(
+            [deepcopy(record) for record in self.readings if matches(record, query)]
+        )
+
+    def find_one(self, query, *args, sort=None):
+        records = self.find(query)
+        if sort:
+            records = records.sort(*sort[0])
+        return records[0] if records else None
+
     def aggregate(self, pipeline):
-        return list(reversed(self.readings[-20:]))
+        query = pipeline[0].get("$match", {})
+        records = self.find(query).sort("timestamp", -1)
+        return records[:20]
 
     def insert_one(self, reading):
         self.readings.append(deepcopy(reading))
@@ -71,13 +117,13 @@ def sample_readings():
     return readings
 
 
-def demo_history(collection, hours, now=None):
+def demo_history(collection, hours, now=None, device_filter=None):
     end = now or datetime.now(timezone.utc)
     start = end - timedelta(hours=hours)
     records = [
         record
         for record in collection.readings
-        if start <= parse_timestamp(record["timestamp"]) <= end
+        if matches(record, device_filter) and start <= parse_timestamp(record["timestamp"]) <= end
     ]
     bucket_seconds = max(60, hours * 3600 // 240)
     groups = {}
@@ -113,7 +159,7 @@ def demo_history(collection, hours, now=None):
     }
 
 
-def demo_rainfall(collection, hours, update_interval_ms=60000, round_hour=True):
+def demo_rainfall(collection, hours, update_interval_ms=60000, round_hour=True, device_filter=None):
     now = datetime.now(timezone.utc)
     end = (
         (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0) if round_hour else now
@@ -122,7 +168,8 @@ def demo_rainfall(collection, hours, update_interval_ms=60000, round_hour=True):
     records = [
         record
         for record in collection.readings
-        if start - timedelta(minutes=10) <= parse_timestamp(record["timestamp"]) <= end
+        if matches(record, device_filter)
+        and start - timedelta(minutes=10) <= parse_timestamp(record["timestamp"]) <= end
     ]
     data = rainfall_buckets(records, start, hours, max(600, update_interval_ms / 1000 * 3))
     if end > now:
@@ -137,7 +184,11 @@ def load_demo_app():
     configuration.COLLECTION_NAME = "readings"
     configuration.CONFIG_NAME = "configuration"
     configuration.SECRET_KEY = b"local-demo-only"
-    configuration.AUTHORIZED_TOKENS = {"demo-token": "demo-station"}
+    configuration.AUTHORIZED_TOKENS = {
+        "demo-token": "demo-station",
+        "demo-roof-token": "demo-roof",
+        "demo-spare-token": "demo-spare",
+    }
     configuration.OPENWEATHER_API_KEY = ""
     configuration.WEATHER_LOCATION_LAT = 0
     configuration.WEATHER_LOCATION_LON = 0
@@ -147,26 +198,54 @@ def load_demo_app():
     root = Path(__file__).resolve().parents[1]
     specification = importlib.util.spec_from_file_location("meteo_demo_app", root / "app.py")
     module = importlib.util.module_from_spec(specification)
-    with patch.dict(sys.modules, {"config": package, "config.config_db": configuration}), patch(
+    with patch.dict(
+        sys.modules, {"config": package, "config.config_db": configuration}
+    ), patch.dict(
+        os.environ,
+        {
+            "METEO_SESSION_SECRET": "isolated-demo-session-secret-keep-out-of-production",
+            "METEO_COOKIE_SECURE": "0",
+        },
+    ), patch(
         "pymongo.MongoClient"
     ):
         sys.modules[specification.name] = module
         specification.loader.exec_module(module)
-    module.collection = MemoryReadings(sample_readings())
+    readings = sample_readings()
+    roof = deepcopy(readings[-1441:])
+    for reading in roof:
+        reading["device_id"] = "demo-roof"
+        reading["environment"]["temperature"] -= 2.5
+    spare = deepcopy(readings[-61:])
+    for reading in spare:
+        reading["device_id"] = "demo-spare"
+        reading["environment"]["temperature"] += 1.5
+    module.collection = MemoryReadings(readings + roof + spare)
     module.config = MemoryConfiguration()
+    store = AccountStore(mongomock.MongoClient()["offline_accounts"])
+    module.app.extensions["accounts"] = store
+    module.app.extensions["legacy_station_config"] = module.config
+    user = store.register("observer", "ocean-breeze-demo")
+    station = store.claim(user["_id"], "demo-station", "Сад, Львів", module.config.find_one())
+    store.claim(user["_id"], "demo-roof", "Дах, Львів", module.config.find_one())
+    module.demo_pairing_code = store.issue_pairing_code("demo-spare")
+    module.app.jinja_env.globals["preview_pairing_code"] = module.demo_pairing_code
+    module.demo_user_id = str(user["_id"])
+    module.demo_station_id = str(station["_id"])
     module.history_report = demo_history
-    module.latest_reading = lambda collection, before=None: next(
+    module.latest_reading = lambda collection, before=None, device_filter=None: next(
         (
             record
             for record in reversed(collection.readings)
-            if before is None or parse_timestamp(record["timestamp"]) <= before
+            if matches(record, device_filter)
+            and (before is None or parse_timestamp(record["timestamp"]) <= before)
         ),
         None,
     )
     module.rainfall_report = demo_rainfall
 
     def demo_forecast():
-        latest = module.collection.readings[-1]
+        latest = module.latest_reading(module.collection, device_filter=module.active_data_filter())
         environment = latest["environment"]
         return (
             module.jsonify(

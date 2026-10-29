@@ -68,13 +68,14 @@ def time_window_stages(start, end):
     ]
 
 
-def latest_reading(collection, before=None):
+def latest_reading(collection, before=None, device_filter=None):
     condition = {"$ne": None}
     if before is not None:
         condition["$lte"] = before
     records = list(
         collection.aggregate(
             [
+                *([{"$match": device_filter}] if device_filter else []),
                 timestamp_stage(),
                 {"$match": {"observed_at": condition}},
                 {"$sort": {"observed_at": -1}},
@@ -90,7 +91,7 @@ def latest_reading(collection, before=None):
     return record
 
 
-def history_report(collection, hours, now=None):
+def history_report(collection, hours, now=None, device_filter=None):
     end = now or datetime.now(timezone.utc)
     start = end - timedelta(hours=hours)
     bucket_ms = max(60, hours * 3600 // 240) * 1000
@@ -117,6 +118,7 @@ def history_report(collection, hours, now=None):
     result = list(
         collection.aggregate(
             [
+                *([{"$match": device_filter}] if device_filter else []),
                 *time_window_stages(start, end),
                 {
                     "$facet": {
@@ -200,7 +202,7 @@ def rainfall_buckets(readings, start, hours, max_gap_seconds=600):
     samples = []
     for record in readings:
         timestamp = parse_timestamp(record.get("timestamp"))
-        tips = finite_number(record.get("rainfall", {}).get("tips"))
+        tips = finite_number((record.get("rainfall") or {}).get("tips"))
         if timestamp is not None and tips is not None and tips >= 0:
             samples.append((timestamp, tips))
     samples.sort(key=lambda sample: sample[0])
@@ -239,15 +241,18 @@ def rainfall_buckets(readings, start, hours, max_gap_seconds=600):
     return buckets
 
 
-def rainfall_report(collection, hours, update_interval_ms=60000, now=None, round_hour=True):
+def rainfall_report(
+    collection, hours, update_interval_ms=60000, now=None, round_hour=True, device_filter=None
+):
     end = (now or datetime.now(timezone.utc)).replace(microsecond=0)
     if round_hour and (end.minute or end.second):
         end = (end + timedelta(hours=1)).replace(minute=0, second=0)
     start = end - timedelta(hours=hours)
-    baseline = latest_reading(collection, start)
+    baseline = latest_reading(collection, start, device_filter)
     readings = list(
         collection.aggregate(
             [
+                *([{"$match": device_filter}] if device_filter else []),
                 *time_window_stages(start, end),
                 {"$project": {"_id": 0, "timestamp": 1, "rainfall": 1}},
             ]

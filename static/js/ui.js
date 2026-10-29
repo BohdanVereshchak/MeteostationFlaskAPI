@@ -38,7 +38,14 @@ export async function requestJSON(url, options = {}) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
+        const headers = new Headers(options.headers);
+        if (
+            url.startsWith("/") &&
+            !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())
+        ) {
+            headers.set("X-CSRF-Token", document.querySelector('meta[name="csrf-token"]').content);
+        }
+        const response = await fetch(url, { ...options, headers, signal: controller.signal });
         const data = await response.json();
         if (!response.ok) {
             const message = typeof data.error === "string" ? data.error : data.reason;

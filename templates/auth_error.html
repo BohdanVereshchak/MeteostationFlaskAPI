@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Оновіть сторінку{% endblock %}
+{% block page %}auth{% endblock %}
+{% block content %}
+    <section class="auth-form-panel recovery-panel">
+        <h1>Повторімо цю дію</h1>
+        <p>
+            Сторінка втратила актуальний захисний код. Відкрийте її знову, щоб безпечно продовжити.
+        </p>
+        <a class="button" href="{{ url_for('index_page') }}">Повернутися до станції</a>
+    </section>
+{% endblock %}

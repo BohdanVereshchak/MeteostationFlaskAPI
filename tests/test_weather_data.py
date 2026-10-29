@@ -8,6 +8,7 @@ from weather_data import (
     latest_reading,
     parse_timestamp,
     rainfall_buckets,
+    rainfall_report,
     validate_configuration,
 )
 
@@ -93,6 +94,20 @@ class WeatherDataTests(unittest.TestCase):
         self.assertEqual(report["series"], [])
         pipeline = collection.aggregate.call_args.args[0]
         self.assertIn({"$limit": 100}, pipeline[-1]["$facet"]["readings"])
+
+    def test_station_filter_is_applied_before_every_time_series_query(self):
+        scope = {"device_id": "only-this-device"}
+        history = Mock()
+        history.aggregate.return_value = [{"series": [], "readings": [], "summary": []}]
+        history_report(history, 24, self.start, device_filter=scope)
+        self.assertEqual(history.aggregate.call_args.args[0][0], {"$match": scope})
+        recent = Mock()
+        recent.aggregate.return_value = []
+        latest_reading(recent, device_filter=scope)
+        self.assertEqual(recent.aggregate.call_args.args[0][0], {"$match": scope})
+        rainfall_report(recent, 1, now=self.start, device_filter=scope)
+        for call in recent.aggregate.call_args_list:
+            self.assertEqual(call.args[0][0], {"$match": scope})
 
 
 if __name__ == "__main__":

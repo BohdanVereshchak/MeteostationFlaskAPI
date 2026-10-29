@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response, render_template
+from flask import Flask, request, jsonify, make_response, render_template, g
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
@@ -26,9 +26,18 @@ from weather_data import (
     finite_number,
     history_report,
     latest_reading,
+    parse_timestamp,
     rainfall_report,
     timestamp_stage,
     validate_configuration,
+)
+
+from auth import (
+    account_store,
+    active_data_filter,
+    authorized_device,
+    configuration_for_device,
+    install_authentication,
 )
 
 ROUND_HOURLY_RAINFALL_TIME = True
@@ -54,6 +63,8 @@ client = MongoClient(
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
+
+install_authentication(app, db, AUTHORIZED_TOKENS, config)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -129,10 +140,17 @@ def receive_data():
         app.logger.error(f"JSON parse error: {str(e)}")
         return jsonify({"error": "Bad JSON"}), 400
 
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload must be a JSON object"}), 400
+    for section in ["environment", "air_quality", "rainfall", "system"]:
+        if section in data and not isinstance(data[section], dict):
+            return jsonify({"error": f"{section} must be an object"}), 400
+    if "timestamp" in data and parse_timestamp(data["timestamp"]) is None:
+        return jsonify({"error": "Invalid timestamp"}), 400
     data["device_id"] = AUTHORIZED_TOKENS[token]
 
     # Отримуємо поточну конфігурацію
-    config_data = config.find_one({}, {"_id": 0}) or {}
+    config_data = configuration_for_device(data["device_id"])
     alerts = []
 
     if "environment" in data and isinstance(data["environment"], dict):
@@ -156,6 +174,7 @@ def get_data():
     data = list(
         collection.aggregate(
             [
+                {"$match": active_data_filter()},
                 timestamp_stage(),
                 {"$match": {"observed_at": {"$ne": None}}},
                 {"$sort": {"observed_at": -1}},
@@ -175,18 +194,18 @@ def get_history():
         return jsonify({"error": "Період має бути цілим числом годин."}), 400
     if not 1 <= hours <= 720:
         return jsonify({"error": "Оберіть період від 1 до 720 годин."}), 400
-    return jsonify(history_report(collection, hours))
+    return jsonify(history_report(collection, hours, device_filter=active_data_filter()))
 
 
 @app.route("/api/data/all", methods=["GET"])
 def get_all_data():
-    data = list(collection.find({}, {"_id": 0}).sort("timestamp", -1))
+    data = list(collection.find(active_data_filter(), {"_id": 0}).sort("timestamp", -1))
     return jsonify(data)
 
 
 @app.route("/api/data/last", methods=["GET"])
 def get_last_data():
-    reading = latest_reading(collection)
+    reading = latest_reading(collection, device_filter=active_data_filter())
     return jsonify([reading] if reading else [])
 
 
@@ -205,11 +224,16 @@ def get_stats():
     past_str = past.replace(microsecond=0).isoformat()
 
     # Найближчий до часу `past_str`, але не пізніше (≤)
-    first = collection.find_one({"timestamp": {"$lte": past_str}}, sort=[("timestamp", -1)])
+    first = collection.find_one(
+        {"$and": [active_data_filter(), {"timestamp": {"$lte": past_str}}]},
+        sort=[("timestamp", -1)],
+    )
 
     # Найновіший запис (використаємо поточний час як максимум)
     now_str = now.replace(microsecond=0).isoformat()
-    last = collection.find_one({"timestamp": {"$lte": now_str}}, sort=[("timestamp", -1)])
+    last = collection.find_one(
+        {"$and": [active_data_filter(), {"timestamp": {"$lte": now_str}}]}, sort=[("timestamp", -1)]
+    )
 
     rainfall_mm = None
     if first and last:
@@ -219,6 +243,7 @@ def get_stats():
 
     # Агрегація температури з моменту "past_str" (тобто все, що було після дня назад)
     pipeline = [
+        {"$match": active_data_filter()},
         {"$match": {"timestamp": {"$gte": past_str}}},
         {
             "$group": {
@@ -237,9 +262,11 @@ def get_stats():
 
 
 def requested_rainfall(hours, round_hour=False):
-    configuration = config.find_one({}, {"_id": 0}) or {}
+    configuration = g.station.get("settings", {})
     interval = configuration.get("system", {}).get("update_interval_ms", 60000)
-    return rainfall_report(collection, hours, interval, round_hour=round_hour)
+    return rainfall_report(
+        collection, hours, interval, round_hour=round_hour, device_filter=active_data_filter()
+    )
 
 
 @app.route("/api/data/rainfall", methods=["GET"])
@@ -277,11 +304,13 @@ def get_hourly_rainfall():
 
 @app.route("/api/config", methods=["GET"])
 def get_config():
-    result = config.find_one({}, {"_id": 0})
-    if result:
-        return jsonify(result)
-    else:
-        return jsonify({"error": "No config found"}), 404
+    device_id = authorized_device(request.headers.get("Authorization", ""))
+    configuration = (
+        configuration_for_device(device_id)
+        if device_id is not None
+        else g.station.get("settings", {})
+    )
+    return jsonify(configuration)
 
 
 @app.route("/api/config", methods=["POST"])
@@ -290,15 +319,9 @@ def update_config():
         new_configuration = validate_configuration(request.get_json(silent=True))
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
-    # Dotted updates preserve device settings that this form does not edit.
-    updates = {
-        f"{section}.{field}": value
-        for section, fields in new_configuration.items()
-        for field, value in fields.items()
-    }
-    if not updates:
-        return jsonify({"error": "Немає полів для оновлення."}), 400
-    config.update_one({}, {"$set": updates}, upsert=True)
+    saved = account_store().save_settings(str(g.station["_id"]), g.user["_id"], new_configuration)
+    if not saved:
+        return jsonify({"error": "Станція більше не належить цьому обліковому запису."}), 403
     return jsonify({"status": "updated"}), 200
 
 
@@ -329,8 +352,7 @@ def get_weather_forecast():
 
     try:
         # Get location from config or use defaults
-        config_data = config.find_one({}, {"_id": 0})
-        location = config_data.get("location", {}) if config_data else {}
+        location = g.station.get("settings", {}).get("location", {})
 
         # Get current weather data
         url = f"https://api.openweathermap.org/data/2.5/weather"
@@ -370,7 +392,7 @@ def get_weather_forecast():
 
 @app.route("/api/weather/comparison", methods=["GET"])
 def get_weather_comparison():
-    station = latest_reading(collection)
+    station = latest_reading(collection, device_filter=active_data_filter())
     if not station:
         return jsonify({"error": "Станція ще не передала вимірювань."}), 404
     reference_response, status = get_weather_forecast()

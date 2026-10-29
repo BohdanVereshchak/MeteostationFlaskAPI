@@ -8,6 +8,21 @@ if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     );
 }
 
+document.getElementById("selected-station")?.addEventListener("change", () => {
+    document.getElementById("station-switch").requestSubmit();
+});
+
+const menu = document.querySelector(".account-menu");
+document.addEventListener("click", (event) => {
+    if (menu?.open && !menu.contains(event.target)) menu.open = false;
+});
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu?.open) {
+        menu.open = false;
+        menu.querySelector("summary").focus();
+    }
+});
+
 const pageModules = {
     overview: () => import("./overview.js"),
     history: () => import("./history.js"),
