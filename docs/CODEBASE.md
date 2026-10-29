@@ -122,3 +122,23 @@ The indexes are additive. Tests use `mongomock` for account persistence and
 explicitly replace sensor-query boundaries in the preview. Production never
 imports the preview account or sample readings. The original station data remains
 in its existing collection; ownership is represented in separate collections.
+
+## Add or change a translation
+
+The original Ukrainian wording is the message key. Templates call `t(...)`, and
+`translations/en.json` supplies the English wording. `i18n.py` selects a language
+before the authentication guard runs and gives both Jinja and the browser the
+same catalog. `static/js/i18n.js` performs message lookup and named-value
+interpolation. The language choice is a separate cookie, so switching it does
+not clear the login session or selected station.
+
+Keep dynamic values separate from translated sentences. For example,
+`t("{shown} із {total} записів", { shown: 0, total: 100 })` lets each language
+choose word order while preserving a numeric zero. Do not concatenate translated
+word fragments or pass user-provided station names through the translator.
+
+Add the English entry whenever you add a new message. Keep placeholder names
+identical in both versions; localization tests check this and check catalog
+coverage. The catalog is injected as escaped JSON, and messages are rendered as
+text through Jinja or `textContent`. Dates/numbers use the selected browser
+locale; CSV field names and UTC export timestamps stay stable for other tools.

@@ -31,3 +31,23 @@ Checked on October 29, 2026.
 No firmware or production weather records were changed. No hosting deployment
 command was run. Email verification, automated password recovery, and a shared
 distributed request limiter remain outside the current account implementation.
+
+## English and Ukrainian interface
+
+The language update was verified on October 29, 2026.
+
+- All 38 Python tests and nine JavaScript tests passed. The added tests cover
+  browser-language selection, persistent preferences, translated private pages
+  and validation errors, catalog coverage, matching named placeholders, zero
+  values, and safe nonrecursive substitution. Browser modules passed syntax checks.
+- Browser QA checked English login, overview, archive, comparison, station settings,
+  and station management. Switching to Ukrainian and back preserved the signed-in
+  account and selected station. Language choice also persisted through logout.
+- Dates, decimal separators, chart descriptions, rainfall coverage, and validation
+  messages follow the selected language. User-provided station labels are preserved.
+- All five authenticated pages and login fit a 320 CSS-pixel viewport without
+  document overflow. Desktop captures use a 1440 CSS-pixel viewport.
+- The final English screenshots show isolated sample data from the actual source.
+  No production readings, accounts, or settings were modified during these checks.
+- Certificate documentation was checked against the server, ESP32 source, and
+  firmware configuration. Local certificate files were retained untouched.

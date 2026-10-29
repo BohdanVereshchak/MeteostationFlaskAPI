@@ -2,13 +2,26 @@
 
 A Flask/MongoDB application for an ESP32 weather station. The station collects
 measurements and sends signed JSON. This application stores them and provides a
-Ukrainian dashboard, history, rainfall analysis, and an OpenWeather comparison.
+English/Ukrainian dashboard, history, rainfall analysis, and an OpenWeather comparison.
 
 ![Meteo dashboard with sample readings](docs/screenshots/overview.jpg)
 
 The Summer Ocean Breeze interface uses honeydew, frosted blue, cerulean, oxford
 navy, and punch red. Fonts and icons are served locally. There is no frontend
 framework, build step, CDN dependency, or charting dependency.
+
+## Interface languages
+
+English and Ukrainian are available throughout the dashboard, account forms,
+settings, charts, and validation messages. A supported browser preference is
+used on the first visit; English is the fallback. Choose **EN / УК** in the
+header before signing in, or in the account menu after signing in. The choice
+persists across page navigation and sign-out. Direct links can use `?lang=en`
+or `?lang=uk`.
+
+Numbers, dates, place search, and OpenWeather descriptions follow the selected
+language. Measurement units remain metric and displayed times remain in
+Europe/Kyiv. User-provided station names are preserved rather than translated.
 
 ## Accounts and station connection
 
@@ -205,3 +218,9 @@ docker run --env-file secrets.env -e METEO_SESSION_SECRET -p 8080:8080 meteostat
 Set `METEO_SESSION_SECRET` in your shell before this command. For an HTTP-only
 local container, additionally pass `-e METEO_COOKIE_SECURE=0`; keep HTTPS-only
 cookies in deployment. No hosting service is deployed by these source changes.
+
+## Certificate files
+
+See [the TLS guide](docs/TLS.md) for the current ESP32 trust bundle, HTTPS/Waitress
+boundary, and the purpose of the local certificate/key files. No certificate
+files were deleted when adding the English interface.
