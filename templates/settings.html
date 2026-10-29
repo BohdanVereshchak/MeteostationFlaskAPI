@@ -1,163 +1,186 @@
 {% extends "base.html" %}
-{% block title %}Налаштування{% endblock %}
+{% block title %}Ваша станція{% endblock %}
+{% block page %}settings{% endblock %}
 {% block content %}
-<h2 class="mb-4">Налаштування станції</h2>
-<div class="card p-4 shadow-sm">
-    <form id="configForm">
-        <div class="mb-3">
-            <label for="update_interval" class="form-label">Інтервал вимірювань (секунди)</label>
-            <input type="number" class="form-control" id="update_interval" name="update_interval" required min="1">
+    <div class="page-heading">
+        <div>
+            <p class="section-label">Налаштовано під ваше місце</p>
+            <h1>Ваша станція</h1>
         </div>
-
-        <div class="mb-3">
-            <label class="form-label">Місцезнаходження станції</label>
-            <div class="mb-3">
-                <label for="address_search" class="form-label">Пошук за адресою</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="address_search" 
-                           placeholder="Введіть адресу (наприклад: Львів, вул. Степана Бандери 12)">
-                    <button class="btn btn-outline-primary" type="button" onclick="searchLocation()">
-                        Знайти
+        {{ icon('sliders-horizontal', 'heading-icon') }}
+    </div>
+    <p class="page-intro">Оберіть ритм вимірювань, місце спостереження та межі для сповіщень.</p>
+    <p id="page-message" class="notice" role="status" hidden></p>
+    <form id="station-form" class="settings-layout">
+        <div class="settings-sections">
+            <fieldset>
+                <legend>{{ icon('radio') }} Ритм спостережень</legend>
+                <p class="field-description">
+                    Інтервал передається станції під час отримання нею конфігурації.
+                </p>
+                <label for="update-interval">Інтервал вимірювань, секунди</label>
+                <div class="interval-control">
+                    <button
+                        type="button"
+                        data-step="-10"
+                        aria-label="Зменшити інтервал на 10 секунд"
+                    >
+                        {{ icon('minus') }}
+                    </button>
+                    <input
+                        id="update-interval"
+                        name="update_interval"
+                        type="number"
+                        min="1"
+                        max="86400"
+                        step="1"
+                        required
+                    />
+                    <button
+                        type="button"
+                        data-step="10"
+                        aria-label="Збільшити інтервал на 10 секунд"
+                    >
+                        {{ icon('plus') }}
                     </button>
                 </div>
-                <small class="form-text text-muted">Введіть адресу для автоматичного визначення координат</small>
-            </div>
-            <div class="row mt-3">
-                <div class="col">
-                    <label for="location_lat" class="form-label">Широта</label>
-                    <input type="number" class="form-control" id="location_lat" name="location_lat" 
-                           placeholder="49.8815" step="0.0001">
+                <div class="interval-presets" aria-label="Швидкий вибір інтервалу">
+                    <button type="button" data-interval="30">30 с</button>
+                    <button type="button" data-interval="60">1 хв</button>
+                    <button type="button" data-interval="300">5 хв</button>
                 </div>
-                <div class="col">
-                    <label for="location_lon" class="form-label">Довгота</label>
-                    <input type="number" class="form-control" id="location_lon" name="location_lon" 
-                           placeholder="24.0929" step="0.0001">
+            </fieldset>
+            <fieldset>
+                <legend>{{ icon('map-pin') }} Місце спостереження</legend>
+                <p class="field-description">
+                    Координати визначають точку зіставлення з OpenWeather. Можна ввести їх вручну
+                    або знайти населений пункт.
+                </p>
+                <label for="location-search">Місто або населений пункт</label>
+                <div class="search-control">
+                    <input
+                        id="location-search"
+                        type="search"
+                        placeholder="Наприклад, Львів"
+                        maxlength="120"
+                    />
+                    <button type="button" id="search-location" class="button button-secondary">
+                        {{ icon('search') }} Знайти
+                    </button>
                 </div>
-            </div>
-            <div id="searchResult" class="mt-2 text-muted small"></div>
+                <p class="field-description">Пошук надсилає введену назву сервісу Open-Meteo.</p>
+                <div id="location-results" class="location-results" role="status"></div>
+                <div class="field-pair">
+                    <div>
+                        <label for="latitude">Широта</label>
+                        <input
+                            id="latitude"
+                            name="latitude"
+                            type="number"
+                            min="-90"
+                            max="90"
+                            step="any"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label for="longitude">Довгота</label>
+                        <input
+                            id="longitude"
+                            name="longitude"
+                            type="number"
+                            min="-180"
+                            max="180"
+                            step="any"
+                            required
+                        />
+                    </div>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>{{ icon('bell') }} Межі сповіщень</legend>
+                <p class="field-description">
+                    Порожнє поле вимикає відповідну межу. Нуль — допустиме значення.
+                </p>
+                <h2 class="field-group-heading">Температура, °C</h2>
+                <div class="field-pair">
+                    <div>
+                        <label for="temperature-min">Нижня межа</label>
+                        <input
+                            id="temperature-min"
+                            name="temperature_min"
+                            type="number"
+                            min="-100"
+                            max="100"
+                            step="any"
+                            placeholder="Без обмеження"
+                        />
+                    </div>
+                    <div>
+                        <label for="temperature-max">Верхня межа</label>
+                        <input
+                            id="temperature-max"
+                            name="temperature_max"
+                            type="number"
+                            min="-100"
+                            max="100"
+                            step="any"
+                            placeholder="Без обмеження"
+                        />
+                    </div>
+                </div>
+                <h2 class="field-group-heading">Вологість, %</h2>
+                <div class="field-pair">
+                    <div>
+                        <label for="humidity-min">Нижня межа</label>
+                        <input
+                            id="humidity-min"
+                            name="humidity_min"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            placeholder="Без обмеження"
+                        />
+                    </div>
+                    <div>
+                        <label for="humidity-max">Верхня межа</label>
+                        <input
+                            id="humidity-max"
+                            name="humidity_max"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            placeholder="Без обмеження"
+                        />
+                    </div>
+                </div>
+            </fieldset>
         </div>
-
-        <div class="mb-3">
-            <label class="form-label">Температура (°C)</label>
-            <div class="row">
-                <div class="col">
-                    <input type="number" class="form-control" id="temp_min" name="temp_min" placeholder="Мін.">
-                </div>
-                <div class="col">
-                    <input type="number" class="form-control" id="temp_max" name="temp_max" placeholder="Макс.">
-                </div>
+        <aside class="settings-summary">
+            <div class="station-stamp">
+                {{ icon('radio') }}
+                <span>
+                    Ваше місце.
+                    <br />
+                    Ваші вимірювання.
+                </span>
             </div>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Вологість (%)</label>
-            <div class="row">
-                <div class="col">
-                    <input type="number" class="form-control" id="hum_min" name="hum_min" placeholder="Мін." min="0" max="100">
-                </div>
-                <div class="col">
-                    <input type="number" class="form-control" id="hum_max" name="hum_max" placeholder="Макс." min="0" max="100">
-                </div>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary">Зберегти</button>
+            <h2>Зберегти зміни</h2>
+            <p>
+                Межі використовуються сервером для перевірки наступних вимірювань. Уже збережені
+                спостереження не зміняться.
+            </p>
+            <button type="submit" id="save-settings" class="button" disabled>
+                {{ icon('check') }} Зберегти налаштування
+            </button>
+            <p id="save-status" role="status" class="save-status">
+                Завантажуємо поточну конфігурацію
+            </p>
+            <button type="reset" class="text-button" id="reset-settings" disabled>
+                Скасувати зміни
+            </button>
+        </aside>
     </form>
-</div>
-
-<script>
-    // Функція пошуку координат за адресою
-    async function searchLocation() {
-        const address = document.getElementById('address_search').value;
-        const resultDiv = document.getElementById('searchResult');
-        
-        if (!address) {
-            resultDiv.innerHTML = '<span class="text-danger">Введіть адресу для пошуку</span>';
-            return;
-        }
-
-        resultDiv.innerHTML = 'Пошук...';
-        
-        try {
-            const encodedAddress = encodeURIComponent(address);
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`);
-            const data = await response.json();
-
-            if (data && data.length > 0) {
-                const location = data[0];
-                document.getElementById('location_lat').value = parseFloat(location.lat).toFixed(4);
-                document.getElementById('location_lon').value = parseFloat(location.lon).toFixed(4);
-                resultDiv.innerHTML = `<span class="text-success">Знайдено: ${location.display_name}</span>`;
-            } else {
-                resultDiv.innerHTML = '<span class="text-danger">Адресу не знайдено. Спробуйте інший запит</span>';
-            }
-        } catch (error) {
-            resultDiv.innerHTML = '<span class="text-danger">Помилка пошуку. Спробуйте ще раз</span>';
-            console.error('Search error:', error);
-        }
-    }
-
-    // Handle Enter key in address search
-    document.getElementById('address_search').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            searchLocation();
-        }
-    });
-
-    // Завантаження конфігурації
-    fetch('/api/config')
-        .then(res => res.json())
-        .then(config => {
-            const intervalMs = config.system?.update_interval_ms || 300000;
-            document.getElementById('update_interval').value = intervalMs / 1000;
-
-            document.getElementById('temp_min').value = config.temperature?.min ?? '';
-            document.getElementById('temp_max').value = config.temperature?.max ?? '';
-            document.getElementById('hum_min').value = config.humidity?.min ?? '';
-            document.getElementById('hum_max').value = config.humidity?.max ?? '';
-            document.getElementById('location_lat').value = config.location?.latitude ?? '49.8815';
-            document.getElementById('location_lon').value = config.location?.longitude ?? '24.0929';
-        });
-
-    document.getElementById('configForm').onsubmit = async (e) => {
-        e.preventDefault();
-
-        const updateIntervalSec = parseInt(document.getElementById('update_interval').value);
-
-        const data = {
-            system: {
-                update_interval_ms: updateIntervalSec * 1000
-            },
-            location: {
-                latitude: parseFloat(document.getElementById('location_lat').value) || 49.8815,
-                longitude: parseFloat(document.getElementById('location_lon').value) || 24.0929
-            },
-            temperature: {
-                min: parseFloat(document.getElementById('temp_min').value) || null,
-                max: parseFloat(document.getElementById('temp_max').value) || null
-            },
-            humidity: {
-                min: parseFloat(document.getElementById('hum_min').value) || null,
-                max: parseFloat(document.getElementById('hum_max').value) || null
-            }
-        };
-
-        try {
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-
-            if (response.ok) {
-                alert('Налаштування збережено');
-            } else {
-                alert('Помилка збереження');
-            }
-        } catch (err) {
-            alert('Помилка збереження');
-        }
-    };
-</script>
 {% endblock %}

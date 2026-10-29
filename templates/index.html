@@ -1,324 +1,154 @@
 {% extends "base.html" %}
-{% block title %}Головна{% endblock %}
+{% block title %}Погода тут і зараз{% endblock %}
 {% block content %}
-    <h2 class="mb-4">Поточна погода</h2>
-    <div id="weather" class="card p-4 shadow-sm mb-4">Завантаження...</div>
-    
-    <h2 class="mb-4">Опади</h2>
-    <div class="card p-4 shadow-sm">
-        <div class="row">
-            <div class="col-md-6">
-                <div id="rainfallChartContainer">
-                    <canvas id="rainfallChart"></canvas>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="list-group">
-                    <button class="list-group-item list-group-item-action">Останні 24 години</button>
-                    <button class="list-group-item list-group-item-action">Останні 12 годин</button>
-                    <button class="list-group-item list-group-item-action">Останні 6 годин</button>
-                    <button class="list-group-item list-group-item-action">Останні 3 години</button>
-                </div>
-                <div id="rainfallInfo" class="mt-3"></div>
-            </div>
+    <div class="page-heading">
+        <div>
+            <p class="section-label" id="observation-date">Ваш локальний погляд на погоду</p>
+            <h1>Погода тут і зараз</h1>
+        </div>
+        <div class="heading-actions">
+            <span class="connection-state" id="station-status" role="status">
+                Завантажуємо вимірювання
+            </span>
+            <button class="button button-icon" id="refresh" aria-label="Оновити вимірювання">
+                {{ icon('refresh-cw') }}
+            </button>
         </div>
     </div>
-
-    <script>
-        // Load Chart.js library only if not already loaded
-        if (typeof Chart === 'undefined') {
-            const chartScript = document.createElement('script');
-            chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-            chartScript.onload = initRainfallChart;
-            document.head.appendChild(chartScript);
-        } else {
-            initRainfallChart();
-        }
-
-        let rainfallChart = null;
-
-        function initRainfallChart() {
-            const canvas = document.getElementById('rainfallChart');
-            if (!canvas) {
-                console.error('Canvas element not found');
-                return;
-            }
-            
-            // Check if Chart is available
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js not loaded');
-                return;
-            }
-
-            const ctx = canvas.getContext('2d');
-            rainfallChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Опади за годину (мм)',
-                        data: [],
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Міліметри (мм)'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Час'
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Load default data (last 24 hours)
-            loadHourlyRainfallData(6);
-        }
-
-        function loadHourlyRainfallData(hours) {
-            fetch(`/api/data/hourly_rainfall?hours=${hours}`)
-                .then(res => {
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    return res.json();
-                })
-                .then(data => {
-                    if (!data || !data.data || !Array.isArray(data.data)) {
-                        throw new Error('Invalid data received from server');
-                    }
-
-                    // Update chart if it exists and is initialized
-                    if (rainfallChart && typeof rainfallChart.update === 'function') {
-                        // Extract time labels and rainfall values
-                        const labels = data.data.map(item => item.time_label);
-                        const rainfallData = data.data.map(item => item.rainfall_mm);
-                        
-                        rainfallChart.data.labels = labels;
-                        rainfallChart.data.datasets[0].data = rainfallData;
-                        rainfallChart.update();
-                    }
-
-                    // Calculate total rainfall
-                    const totalRainfall = data.data.reduce((sum, item) => sum + item.rainfall_mm, 0);
-                    
-                    // Update info text
-                    let infoText = `
-                        <h4>Опади за останні ${hours} годин</h4>
-                        <p>Загальна кількість опадів: <strong>${totalRainfall.toFixed(2)} мм</strong></p>
-                        <p>Середньогодинні опади: <strong>${(totalRainfall/hours).toFixed(2)} мм/год</strong></p>
-                    `;
-                    
-                    const rainfallInfo = document.getElementById('rainfallInfo');
-                    if (rainfallInfo) {
-                        rainfallInfo.innerHTML = infoText;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading rainfall data:', error);
-                    const rainfallInfo = document.getElementById('rainfallInfo');
-                    if (rainfallInfo) {
-                        rainfallInfo.innerHTML = 
-                            '<div class="alert alert-danger">Помилка завантаження даних про опади: ' + 
-                            error.message + '</div>';
-                    }
-                });
-        }
-
-        // Update buttons to use hourly data
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.list-group-item');
-            buttons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const hours = parseInt(this.textContent.match(/\d+/)[0]);
-                    loadHourlyRainfallData(hours);
-                });
-            });
-        });
-
-        
-        let appConfig = {
-            temperature: { min: 5, max: 35 },
-            humidity: { min: 0, max: 100 }
-        };
-
-        function loadConfig() {
-            return fetch('/api/config')
-                .then(res => res.json())
-                .then(config => {
-                    if (config.temperature) {
-                        appConfig.temperature = {
-                            min: config.temperature.min || 5,
-                            max: config.temperature.max || 35
-                        };
-                    }
-                    if (config.humidity) {
-                        appConfig.humidity = {
-                            min: config.humidity.min || 0,
-                            max: config.humidity.max || 100
-                        };
-                    }
-                    return appConfig;
-                })
-                .catch(() => {
-                    console.log('Using default config');
-                    return appConfig;
-                });
-        }
-
-        appConfig = loadConfig();
-
-        fetch("/api/data")
-        .then(res => res.json())
-        .then(data => {
-            if (!data.length) {
-                document.getElementById("weather").innerHTML = "<p>Немає даних</p>";
-                return;
-            }
-
-            const env = data[0].environment;
-            const rain = data[0].rainfall;
-            const air_quality = data[0].air_quality;
-
-            const getColorLevels = (value, thresholds) => {
-                let levels = [false, false, false, false, false];
-
-                if (value < thresholds[0]) {
-                    return levels;
-                }
-
-                if (thresholds.length === 2) {
-                    const step = (thresholds[1] - thresholds[0]) / 5;
-                    if (value < thresholds[0] + step) {
-                        levels[0] = true;
-                    } else if (value < thresholds[0] + 2*step) {
-                        levels[0] = levels[1] = true;
-                    } else if (value < thresholds[0] + 3*step) {
-                        levels[0] = levels[1] = levels[2] = true;
-                    } else if (value < thresholds[0] + 4*step) {
-                        levels[0] = levels[1] = levels[2] = levels[3] = true;
-                    } else {
-                        levels.fill(true);
-                    }
-                }
-                else if (thresholds.length === 5) {
-                    if (value < thresholds[1]) {
-                        levels[0] = true;
-                    } else if (value < thresholds[2]) {
-                        levels[0] = levels[1] = true;
-                    } else if (value < thresholds[3]) {
-                        levels[0] = levels[1] = levels[2] = true;
-                    } else if (value < thresholds[4]) {
-                        levels[0] = levels[1] = levels[2] = levels[3] = true;
-                    } else {
-                        levels.fill(true);
-                    }
-                }
-
-                return levels;
-            };
-
-            const renderBars = (levels) => {
-                return `
-                    <div class="d-inline-block ms-2">
-                        <span class="indicator ${levels[0] ? 'blue' : ''}"></span>
-                        <span class="indicator ${levels[1] ? 'lightblue' : ''}"></span>
-                        <span class="indicator ${levels[2] ? 'green' : ''}"></span>
-                        <span class="indicator ${levels[3] ? 'yellow' : ''}"></span>
-                        <span class="indicator ${levels[4] ? 'red' : ''}"></span>
-                    </div>
-                `;
-            };
-
-            const html = `
-                <h4>Дані станом на ${(() => {
-                    const timestamp = data[0].timestamp;
-                    let date;
-                    if (timestamp.includes('T')) {
-                        const hasTz = /[zZ]|[+\-]\d{2}:\d{2}$/.test(timestamp);
-                        date = new Date(hasTz ? timestamp : (timestamp + 'Z'));
-                    } else {
-                        // If "YYYY-MM-DD HH:MM:SS" format
-                        const [datePart, timePart] = timestamp.split(' ');
-                        const [year, month, day] = datePart.split('-').map(Number);
-                        const [hour, minute, second] = (timePart ? timePart.split(':') : ['0','0','0']).map(Number);
-                        date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-                    }
-                    
-                    try {
-                        return date.toLocaleString('uk-UA', {
-                            timeZone: 'Europe/Kyiv',
-                            hour12: false,
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        }).replace(',', '');
-                    } catch (e) {
-                        const pad = (num) => String(num).padStart(2, '0');
-                        const kyiv = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
-                        return `${pad(kyiv.getDate())}.${pad(kyiv.getMonth() + 1)}.${kyiv.getFullYear()} ${pad(kyiv.getHours())}:${pad(kyiv.getMinutes())}:${pad(kyiv.getSeconds())}`;
-                    }
-                })()}</h4>
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item">
-                        Температура: ${env.temperature.toFixed(2)} °C
-                        ${renderBars(getColorLevels(env.temperature, [appConfig.temperature.min, appConfig.temperature.max]))}
-                    </li>
-                    <li class="list-group-item">
-                        Тиск: ${env.pressure.toFixed(2)} гПа
-                        ${renderBars(getColorLevels(env.pressure, [900, 1100]))}
-                    </li>
-                    <li class="list-group-item">
-                        Вологість: ${env.humidity.toFixed(2)} %
-                        ${renderBars(getColorLevels(env.humidity, [appConfig.humidity.min, appConfig.humidity.max]))}
-                    </li>
-                    <li class="list-group-item">
-                        AQI: ${air_quality.aqi}
-                        ${renderBars(getColorLevels(air_quality.aqi, [1, 2, 3, 4, 5]))}
-                    </li>
-                    <li class="list-group-item">
-                        CO₂: ${air_quality.eco2}
-                        ${renderBars(getColorLevels(air_quality.eco2, [400, 600, 800, 1000, 1500]))}
-                    </li>
-                    <li class="list-group-item">
-                        TVOC: ${air_quality.tvoc}
-                        ${renderBars(getColorLevels(air_quality.tvoc, [65, 220, 660, 2200, 5500]))}
-                    </li>
-                </ul>
-            `;
-
-            document.getElementById("weather").innerHTML = html;
-        });
-    </script>
-
-    <style>
-        .indicator {
-            display: inline-block;
-            width: 15px;
-            height: 15px;
-            margin-right: 3px;
-            border-radius: 2px;
-            background-color: #e0e0e0;
-        }
-        .blue { background-color: #2196F3; }
-        .lightblue { background-color: #64B5F6; }
-        .green { background-color: #4CAF50; }
-        .yellow { background-color: #FFEB3B; }
-        .red { background-color: #F44336; }
-    </style>
+    <p id="page-message" class="notice" role="status" hidden></p>
+    <section
+        class="observation-board"
+        aria-label="Останнє спостереження"
+        aria-busy="true"
+        id="observation-board"
+    >
+        <div class="current-observation">
+            <div class="observation-label">Температура повітря {{ icon('thermometer') }}</div>
+            <div class="temperature-reading">
+                <span id="temperature">—</span>
+                <span class="temperature-unit">°C</span>
+            </div>
+            <p class="observation-note" id="temperature-note">Очікуємо перше вимірювання</p>
+            <div class="observation-time">
+                {{ icon('radio') }}
+                <time id="reading-time">Дані ще не завантажено</time>
+            </div>
+        </div>
+        <div class="trend-panel">
+            <div class="panel-heading">
+                <h2>Ритм останньої доби</h2>
+                <a class="text-link" href="{{ url_for('history_page') }}">
+                    Відкрити архів {{ icon('arrow-up-right') }}
+                </a>
+            </div>
+            <div class="segment-control" aria-label="Показник на графіку" id="overview-metrics">
+                <button type="button" data-metric="temperature" aria-pressed="true">
+                    Температура
+                </button>
+                <button type="button" data-metric="humidity" aria-pressed="false">Вологість</button>
+                <button type="button" data-metric="pressure" aria-pressed="false">Тиск</button>
+            </div>
+            <div class="time-chart" id="overview-chart"></div>
+            <p class="chart-caption" id="overview-chart-note">
+                Середні значення за інтервалами · останні 24 години
+            </p>
+        </div>
+        <dl class="observation-rail">
+            <div>
+                <dt>{{ icon('droplets') }} Вологість</dt>
+                <dd>
+                    <span id="humidity">—</span>
+                    <small>%</small>
+                </dd>
+            </div>
+            <div>
+                <dt>{{ icon('gauge') }} Атмосферний тиск</dt>
+                <dd>
+                    <span id="pressure">—</span>
+                    <small>гПа</small>
+                </dd>
+            </div>
+            <div>
+                <dt>{{ icon('arrow-down-up') }} Діапазон за добу</dt>
+                <dd class="range-reading" id="temperature-range">—</dd>
+            </div>
+        </dl>
+    </section>
+    <div class="dashboard-lower">
+        <section class="rain-panel" aria-labelledby="rain-heading">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-label">Кожна крапля має значення</p>
+                    <h2 id="rain-heading">Щоденник дощу</h2>
+                </div>
+                {{ icon('cloud-rain', 'section-icon') }}
+            </div>
+            <div class="rain-controls">
+                <div class="rain-total">
+                    <span id="rain-total">—</span>
+                    <small>мм</small>
+                </div>
+                <div class="segment-control" id="rain-periods" aria-label="Період опадів">
+                    <button data-hours="6" aria-pressed="false">6 год</button>
+                    <button data-hours="12" aria-pressed="false">12 год</button>
+                    <button data-hours="24" aria-pressed="true">24 год</button>
+                </div>
+            </div>
+            <div class="rain-chart" id="rain-chart" aria-label="Погодинні опади"></div>
+            <p id="rain-note" class="chart-caption" role="status">
+                Завантажуємо погодинні вимірювання
+            </p>
+        </section>
+        <section class="air-panel" aria-labelledby="air-heading">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-label">Те, чого не видно</p>
+                    <h2 id="air-heading">Повітря поруч</h2>
+                </div>
+                {{ icon('wind', 'section-icon') }}
+            </div>
+            <dl class="air-readings">
+                <div>
+                    <dt>
+                        Індекс сенсора
+                        <span>AQI</span>
+                    </dt>
+                    <dd id="aqi">—</dd>
+                </div>
+                <div>
+                    <dt>
+                        Еквівалент CO₂
+                        <span>eCO₂ · ppm</span>
+                    </dt>
+                    <dd id="eco2">—</dd>
+                </div>
+                <div>
+                    <dt>
+                        Леткі органічні сполуки
+                        <span>TVOC · ppb</span>
+                    </dt>
+                    <dd id="tvoc">—</dd>
+                </div>
+            </dl>
+            <p class="sensor-note">
+                eCO₂ — оцінка сенсора, а не пряме вимірювання CO₂. Значення AQI показано у шкалі
+                пристрою.
+            </p>
+        </section>
+    </div>
+    <details class="data-details">
+        <summary>Як читати ці вимірювання {{ icon('plus') }}</summary>
+        <div>
+            <p>
+                Станція передає вимірювання періодично. Позначка давності показує вік останнього
+                запису, а не лише доступність сервера. Пропуски в графіках означають відсутність
+                даних.
+            </p>
+            <p>
+                Температура, вологість і тиск — локальні показники. Межі сповіщень можна змінити в
+                розділі «Станція». Дощ показується лише за інтервали з достатніми даними; скидання
+                лічильника не перетворюється на від’ємні опади.
+            </p>
+        </div>
+    </details>
 {% endblock %}

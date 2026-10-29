@@ -1,73 +1,82 @@
-<!DOCTYPE html>
+{% macro icon(name, class_name='') -%}
+    <svg class="icon {{ class_name }}" aria-hidden="true" width="20" height="20">
+        <use href="{{ url_for('static', filename='icons.svg') }}#{{ name }}"></use>
+    </svg>
+{%- endmacro %}
+<!doctype html>
 <html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Метеостанція{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { padding-bottom: 20px; }
-        .navbar { margin-bottom: 20px; }
-        .indicator {
-            display: inline-block;
-            width: 10px;
-            height: 20px;
-            margin-left: 5px;
-            border: 1px solid #ccc;
-            background-color: #eee;
-        }
-        .green {
-            background-color: #28a745 !important;
-        }
-        .yellow {
-            background-color: #ffc107 !important;
-        }
-        .red {
-            background-color: #dc3545 !important;
-        }
-        .diff-positive {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        .diff-negative {
-            color: #28a745;
-            font-weight: bold;
-        }
-        .diff-neutral {
-            color: #6c757d;
-        }
-    </style>
-</head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index_page') }}">Метеостанція</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index_page') }}">Головна</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('history_page') }}">Історія</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('comparison_page') }}">Порівняння</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('settings_page') }}">Налаштування</a>
-                    </li>
-                </ul>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#1d3557" />
+        <meta
+            name="description"
+            content="Власна метеостанція: поточні вимірювання, історія та стан повітря."
+        />
+        <title>{% block title %}Метеостанція{% endblock %} — Meteo</title>
+        <link
+            rel="icon"
+            href="{{ url_for('static', filename='favicon.svg') }}"
+            type="image/svg+xml"
+        />
+        <link
+            rel="preload"
+            href="{{ url_for('static', filename='fonts/golos-text.ttf') }}"
+            as="font"
+            type="font/ttf"
+            crossorigin
+        />
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/station.css') }}" />
+        <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+    </head>
+    <body data-page="{% block page %}overview{% endblock %}">
+        <a class="skip-link" href="#main">До вмісту</a>
+        <header class="site-header">
+            <div class="header-inner">
+                <a
+                    class="brand"
+                    href="{{ url_for('index_page') }}"
+                    aria-label="Meteo — огляд станції"
+                >
+                    {{ icon('waves') }}
+                    <span>
+                        meteo
+                        <span class="brand-dot">.</span>
+                    </span>
+                </a>
+                <nav class="primary-nav" aria-label="Головна навігація">
+                    {% for endpoint, label in [('index_page', 'Огляд'), ('history_page', 'Архів'), ('comparison_page', 'Зіставлення'), ('settings_page', 'Станція')] %}
+                        <a
+                            href="{{ url_for(endpoint) }}"
+                            {% if request.endpoint == endpoint or (endpoint == 'index_page' and request.endpoint == 'main_page') %}aria-current="page"{% endif %}
+                        >
+                            {{ label }}
+                        </a>
+                    {% endfor %}
+                </nav>
+                <span class="header-note">Власна точка спостереження</span>
             </div>
-        </div>
-    </nav>
-
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
+        </header>
+        {% if preview_mode %}
+            <div class="preview-banner">
+                Демонстраційні вимірювання · ізольований перегляд без підключення до вашої станції
+            </div>
+        {% endif %}
+        <main id="main" class="page-shell">{% block content %}{% endblock %}</main>
+        <footer class="site-footer">
+            <span>Велика погода. Власні спостереження.</span>
+            <span>
+                Час: Київ
+                <span aria-hidden="true">/</span>
+                Europe/Kyiv
+            </span>
+        </footer>
+        <noscript>
+            <p class="page-shell notice">
+                Увімкніть JavaScript для завантаження вимірювань.
+                <a href="/api/data">Дані у форматі JSON</a>
+                .
+            </p>
+        </noscript>
+    </body>
 </html>
