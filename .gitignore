@@ -26,3 +26,20 @@ venv/
 # Flask secret key files or config overrides (optional)
 #config/config_db.py
 secrets.env
+
+# Local configuration, keys, development tools, and backups
+.venv/
+.idea/
+.codex-backup/
+.codex/
+evidence/
+config/config_db.py
+*.pem
+*.key
+*.csr
+*.srl
+.env
+.env.*
+!.env.example
+node_modules/
+coverage/
