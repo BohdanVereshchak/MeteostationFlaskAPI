@@ -3,36 +3,69 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
 import certifi
 import requests
 import json
 import hmac
 import hashlib
 import logging
-from config.config_db import *
-from functools import wraps
+import os
+from config.config_db import (
+    AUTHORIZED_TOKENS,
+    COLLECTION_NAME,
+    CONFIG_NAME,
+    DB_NAME,
+    MONGO_URI,
+    OPENWEATHER_API_KEY,
+    SECRET_KEY,
+    WEATHER_LOCATION_LAT,
+    WEATHER_LOCATION_LON,
+)
+from pymongo.errors import PyMongoError
+from weather_data import (
+    finite_number,
+    history_report,
+    latest_reading,
+    rainfall_report,
+    timestamp_stage,
+    validate_configuration,
+)
 
 ROUND_HOURLY_RAINFALL_TIME = True
 
 app = Flask(__name__)
 
-CORS(app, origins=["*"], allow_headers=["Content-Type", "Authorization", "X-Signature"], methods=["GET", "POST", "OPTIONS"])
+CORS(
+    app,
+    origins=["*"],
+    allow_headers=["Content-Type", "Authorization", "X-Signature"],
+    methods=["GET", "POST", "OPTIONS"],
+)
 
 # Підключення до MongoDB
 client = MongoClient(
     MONGO_URI,
-    server_api=ServerApi('1'),
+    server_api=ServerApi("1"),
     tls=True,
     tlsAllowInvalidCertificates=False,
     tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=10000
-)   
+    serverSelectionTimeoutMS=10000,
+)
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 config = db[CONFIG_NAME]
 
 logging.basicConfig(level=logging.INFO)
+
+
+@app.errorhandler(PyMongoError)
+def database_unavailable(error):
+    app.logger.warning("Database request failed: %s", type(error).__name__)
+    return (
+        jsonify({"error": "Сховище вимірювань тимчасово недоступне. Повторіть запит пізніше."}),
+        503,
+    )
+
 
 def verify_hmac_signature(raw_bytes: bytes, received_signature: str) -> bool:
     """
@@ -40,39 +73,28 @@ def verify_hmac_signature(raw_bytes: bytes, received_signature: str) -> bool:
     received_signature - hex string ("abcd1234...")
     """
     computed = hmac.new(SECRET_KEY, raw_bytes, hashlib.sha256).hexdigest()
-    # Використовуємо secure compare
     return hmac.compare_digest(computed, received_signature)
 
-def require_token(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        token = request.headers.get("Authorization", "")
-        if token not in AUTHORIZED_TOKENS:
-            return jsonify({"error": "Unauthorized - invalid token"}), 401
-        # attach device id or user info if потрібно
-        request.device_id = AUTHORIZED_TOKENS[token]
-        return f(*args, **kwargs)
-    return wrapper
 
 def validate_environment(env: dict, config_data: dict):
     alerts = []
     # перевірка типів і значень
-    if 'temperature' in env:
+    if "temperature" in env:
         try:
-            temp = float(env['temperature'])
-            tmin = config_data.get('temperature', {}).get('min')
-            tmax = config_data.get('temperature', {}).get('max')
+            temp = float(env["temperature"])
+            tmin = config_data.get("temperature", {}).get("min")
+            tmax = config_data.get("temperature", {}).get("max")
             if tmin is not None and temp < tmin:
                 alerts.append(f"⚠️ Температура нижче мінімуму: {temp:.2f} < {tmin}")
             if tmax is not None and temp > tmax:
                 alerts.append(f"⚠️ Температура вище максимуму: {temp:.2f} > {tmax}")
         except Exception:
             alerts.append("⚠️ Некоректне значення temperature")
-    if 'humidity' in env:
+    if "humidity" in env:
         try:
-            humidity = float(env['humidity'])
-            hmin = config_data.get('humidity', {}).get('min')
-            hmax = config_data.get('humidity', {}).get('max')
+            humidity = float(env["humidity"])
+            hmin = config_data.get("humidity", {}).get("min")
+            hmax = config_data.get("humidity", {}).get("max")
             if hmin is not None and humidity < hmin:
                 alerts.append(f"⚠️ Вологість нижче мінімуму: {humidity:.2f} < {hmin}")
             if hmax is not None and humidity > hmax:
@@ -81,51 +103,18 @@ def validate_environment(env: dict, config_data: dict):
             alerts.append("⚠️ Некоректне значення humidity")
     return alerts
 
-# Helper: get cumulative rain "tips" value at or before given ISO timestamp (returns (tips, timestamp))
-def get_latest_tips_before_or_equal(ts_iso: str):
-    """
-    Return (tips_value, record_timestamp) for the latest record with timestamp <= ts_iso.
-    If none found, return (0, None).
-    
-    This function handles two timestamp formats stored as strings:
-    1. Correct ISO format: "2025-10-30T22:00:00+00:00"
-    2. Legacy 'space' format: "2025-10-30 22:00:00"
-    """
-    
-    rec = None
-    try:
-        dt_obj = datetime.fromisoformat(ts_iso)
-        legacy_ts_str = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
-        rec = collection.find_one(
-            {"timestamp": {"$not": {"$regex": "T"}, "$lte": legacy_ts_str}},
-            sort=[("timestamp", -1)]
-        )
 
-        if not rec:
-            return 0, None
-        
-        tips = rec.get("rainfall", {}).get("tips", 0)
-        try:
-            tips = float(tips)
-        except Exception:
-            tips = 0
-        return tips, rec.get("timestamp")
-    
-    except Exception as e:
-        app.logger.error(f"FATAL ERROR in get_latest_tips_before_or_equal: {e}")
-        return 0, None
-
-@app.route('/')
+@app.route("/")
 def main_page():
     return render_template("index.html")
 
 
-@app.route('/api/data', methods=['POST'])
+@app.route("/api/data", methods=["POST"])
 def receive_data():
     token = request.headers.get("Authorization", "")
     if token not in AUTHORIZED_TOKENS:
         return jsonify({"error": "Unauthorized - invalid token"}), 401
-    
+
     received_sig = request.headers.get("X-Signature", "")
     if not received_sig:
         return jsonify({"error": "Missing signature"}), 401
@@ -135,55 +124,77 @@ def receive_data():
         return jsonify({"error": "Invalid signature"}), 401
 
     try:
-        data = json.loads(raw.decode('utf-8'))
+        data = json.loads(raw.decode("utf-8"))
     except Exception as e:
         app.logger.error(f"JSON parse error: {str(e)}")
         return jsonify({"error": "Bad JSON"}), 400
 
-    data['device_id'] = AUTHORIZED_TOKENS[token]
+    data["device_id"] = AUTHORIZED_TOKENS[token]
 
     # Отримуємо поточну конфігурацію
-    config_data = config.find_one({}, {'_id': 0}) or {}
+    config_data = config.find_one({}, {"_id": 0}) or {}
     alerts = []
 
-    if 'environment' in data and isinstance(data['environment'], dict):
-        alerts = validate_environment(data['environment'], config_data)
+    if "environment" in data and isinstance(data["environment"], dict):
+        alerts = validate_environment(data["environment"], config_data)
 
     # Зберігаємо дані
     try:
-        if 'timestamp' not in data:
+        if "timestamp" not in data:
             # store as ISO 8601 with timezone (UTC) so clients and queries are unambiguous
-            data['timestamp'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         collection.insert_one(data)
     except Exception as e:
         app.logger.error(f"DB insert error: {str(e)}")
         return jsonify({"error": "DB error"}), 500
 
-    return jsonify({
-        "status": "success",
-        "alerts": alerts
-    }), 201
+    return jsonify({"status": "success", "alerts": alerts}), 201
 
-@app.route('/api/data', methods=['GET'])
+
+@app.route("/api/data", methods=["GET"])
 def get_data():
-    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(20))
+    data = list(
+        collection.aggregate(
+            [
+                timestamp_stage(),
+                {"$match": {"observed_at": {"$ne": None}}},
+                {"$sort": {"observed_at": -1}},
+                {"$limit": 20},
+                {"$project": {"_id": 0, "observed_at": 0}},
+            ]
+        )
+    )
     return jsonify(data)
 
-@app.route('/api/data/all', methods=['GET'])
+
+@app.route("/api/data/history", methods=["GET"])
+def get_history():
+    try:
+        hours = int(request.args.get("hours", 24))
+    except ValueError:
+        return jsonify({"error": "Період має бути цілим числом годин."}), 400
+    if not 1 <= hours <= 720:
+        return jsonify({"error": "Оберіть період від 1 до 720 годин."}), 400
+    return jsonify(history_report(collection, hours))
+
+
+@app.route("/api/data/all", methods=["GET"])
 def get_all_data():
-    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1))
+    data = list(collection.find({}, {"_id": 0}).sort("timestamp", -1))
     return jsonify(data)
 
-@app.route('/api/data/last', methods=['GET'])
+
+@app.route("/api/data/last", methods=["GET"])
 def get_last_data():
-    data = list(collection.find({}, {'_id': 0}).sort('timestamp', -1).limit(1))
-    return jsonify(data)
+    reading = latest_reading(collection)
+    return jsonify([reading] if reading else [])
+
 
 # http://127.0.0.1:3000/api/data/stats?days=7
-@app.route('/api/data/stats', methods=['GET'])
+@app.route("/api/data/stats", methods=["GET"])
 def get_stats():
     try:
-        days = int(request.args.get('days', 1))
+        days = int(request.args.get("days", 1))
         if days < 1:
             return jsonify({"error": "Days must be >= 1"}), 400
     except ValueError:
@@ -194,17 +205,11 @@ def get_stats():
     past_str = past.replace(microsecond=0).isoformat()
 
     # Найближчий до часу `past_str`, але не пізніше (≤)
-    first = collection.find_one(
-        {"timestamp": {"$lte": past_str}},
-        sort=[("timestamp", -1)]
-    )
+    first = collection.find_one({"timestamp": {"$lte": past_str}}, sort=[("timestamp", -1)])
 
     # Найновіший запис (використаємо поточний час як максимум)
     now_str = now.replace(microsecond=0).isoformat()
-    last = collection.find_one(
-        {"timestamp": {"$lte": now_str}},
-        sort=[("timestamp", -1)]
-    )
+    last = collection.find_one({"timestamp": {"$lte": now_str}}, sort=[("timestamp", -1)])
 
     rainfall_mm = None
     if first and last:
@@ -215,12 +220,14 @@ def get_stats():
     # Агрегація температури з моменту "past_str" (тобто все, що було після дня назад)
     pipeline = [
         {"$match": {"timestamp": {"$gte": past_str}}},
-        {"$group": {
-            "_id": None,
-            "avg_temp": {"$avg": "$environment.temperature"},
-            "min_temp": {"$min": "$environment.temperature"},
-            "max_temp": {"$max": "$environment.temperature"},
-        }}
+        {
+            "$group": {
+                "_id": None,
+                "avg_temp": {"$avg": "$environment.temperature"},
+                "min_temp": {"$min": "$environment.temperature"},
+                "max_temp": {"$max": "$environment.temperature"},
+            }
+        },
     ]
 
     stats = list(collection.aggregate(pipeline))
@@ -228,95 +235,70 @@ def get_stats():
     result["rainfall_mm"] = rainfall_mm
     return jsonify(result), 200
 
-@app.route('/api/data/rainfall', methods=['GET'])
+
+def requested_rainfall(hours, round_hour=False):
+    configuration = config.find_one({}, {"_id": 0}) or {}
+    interval = configuration.get("system", {}).get("update_interval_ms", 60000)
+    return rainfall_report(collection, hours, interval, round_hour=round_hour)
+
+
+@app.route("/api/data/rainfall", methods=["GET"])
 def get_rainfall():
     try:
-        # Get interval from query params (in hours)
-        interval_hours = int(request.args.get('interval', 1))
-        if interval_hours < 1:
-            return jsonify({"error": "Interval must be >= 1 hour"}), 400
+        hours = int(request.args.get("interval", 1))
     except ValueError:
-        return jsonify({"error": "Invalid 'interval' parameter"}), 400
+        return jsonify({"error": "Interval must be an integer."}), 400
+    if not 1 <= hours <= 168:
+        return jsonify({"error": "Interval must be between 1 and 168 hours."}), 400
+    report = requested_rainfall(hours)
+    complete = all(bucket["complete"] for bucket in report["data"])
+    total = sum(bucket["rainfall_mm"] or 0 for bucket in report["data"])
+    return jsonify(
+        {
+            "interval_hours": hours,
+            "rainfall_mm": round(total, 2) if complete else None,
+            "start_time": report["data"][0]["start_ts"],
+            "end_time": report["data"][-1]["end_ts"],
+            "complete": complete,
+        }
+    )
 
-    now = datetime.now(timezone.utc).replace(microsecond=0)
-    past = (now - timedelta(hours=interval_hours)).replace(microsecond=0)
 
-    past_str = past.isoformat()
-    now_str = now.isoformat()
-
-    # Get cumulative tips at or before past and now (fallback to 0)
-    t1, t1_ts = get_latest_tips_before_or_equal(past_str)
-    t2, t2_ts = get_latest_tips_before_or_equal(now_str)
-
-    # Convert tips difference to mm (sensor factor 0.987) and clamp to >= 0
-    rainfall_mm = round(max(0.0, (t2 - t1) * 0.987), 2)
-
-    return jsonify({
-        "interval_hours": interval_hours,
-        "rainfall_mm": rainfall_mm,
-        "start_time": t1_ts,
-        "end_time": t2_ts
-    }), 200
-
-@app.route('/api/data/hourly_rainfall', methods=['GET'])
+@app.route("/api/data/hourly_rainfall", methods=["GET"])
 def get_hourly_rainfall():
     try:
-        # Кількість годин для аналізу (за замовчуванням 3)
-        hours = int(request.args.get('hours', 3))
-        if hours < 1:
-            return jsonify({"error": "Hours must be >= 1"}), 400
+        hours = int(request.args.get("hours", 3))
     except ValueError:
-        return jsonify({"error": "Invalid 'hours' parameter"}), 400
+        return jsonify({"error": "Hours must be an integer."}), 400
+    if not 1 <= hours <= 168:
+        return jsonify({"error": "Hours must be between 1 and 168."}), 400
+    return jsonify(requested_rainfall(hours, ROUND_HOURLY_RAINFALL_TIME))
 
-    now_utc = datetime.now(timezone.utc).replace(microsecond=0)
-    if ROUND_HOURLY_RAINFALL_TIME:
-        # ВАРІАНТ 1 (True): Заокруглюємо час ДО НАСТУПНОЇ ГОДИНИ
-        if now_utc.minute > 0 or now_utc.second > 0:
-            now_utc = (now_utc + timedelta(hours=1)).replace(minute=0, second=0)
-        else:
-            now_utc = now_utc
 
-    data_points = []
-    for i in range(hours, 0, -1):
-        end_time_utc = now_utc - timedelta(hours=i-1)
-        start_time_utc = now_utc - timedelta(hours=i)
-
-        start_str = start_time_utc.isoformat()
-        end_str = end_time_utc.isoformat()
-
-        # cumulative tips at or before start and end
-        t_start, ts_start = get_latest_tips_before_or_equal(start_str)
-        t_end, ts_end = get_latest_tips_before_or_equal(end_str)
-
-        rainfall_mm = round(max(0.0, (t_end - t_start) * 0.987), 2)
-
-        kyiv_label_time = end_time_utc.astimezone(ZoneInfo("Europe/Kyiv"))
-        data_points.append({
-            "hour": kyiv_label_time.hour,
-            "rainfall_mm": rainfall_mm,
-            "time_label": kyiv_label_time.strftime("%H:%M"),
-            "start_ts": ts_start,
-            "end_ts": ts_end
-        })
-
-    return jsonify({
-        "hours": hours,
-        "data": data_points
-    }), 200
-
-@app.route('/api/config', methods=['GET'])
+@app.route("/api/config", methods=["GET"])
 def get_config():
-    result = config.find_one({}, {'_id': 0})
+    result = config.find_one({}, {"_id": 0})
     if result:
         return jsonify(result)
     else:
         return jsonify({"error": "No config found"}), 404
 
 
-@app.route('/api/config', methods=['POST'])
+@app.route("/api/config", methods=["POST"])
 def update_config():
-    new_config = request.json
-    config.update_one({}, {'$set': new_config}, upsert=True)
+    try:
+        new_configuration = validate_configuration(request.get_json(silent=True))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    # Dotted updates preserve device settings that this form does not edit.
+    updates = {
+        f"{section}.{field}": value
+        for section, fields in new_configuration.items()
+        for field, value in fields.items()
+    }
+    if not updates:
+        return jsonify({"error": "Немає полів для оновлення."}), 400
+    config.update_one({}, {"$set": updates}, upsert=True)
     return jsonify({"status": "updated"}), 200
 
 
@@ -325,38 +307,39 @@ def get_time():
     try:
         now = datetime.now(timezone.utc)
         response = {
-             "unix_time": int(now.timestamp()),
-             "iso_datetime": now.replace(microsecond=0).isoformat(),
-             "timezone": "UTC"
+            "unix_time": int(now.timestamp()),
+            "iso_datetime": now.replace(microsecond=0).isoformat(),
+            "timezone": "UTC",
         }
         resp = make_response(jsonify(response), 200)
-        resp.headers['Content-Type'] = 'application/json'
-        resp.headers['Content-Length'] = str(len(resp.data))
-        resp.headers['Connection'] = 'close'
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Content-Length"] = str(len(resp.data))
+        resp.headers["Connection"] = "close"
         return resp
     except Exception as e:
         app.logger.error(f"Time endpoint error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/weather/forecast', methods=['GET'])
+@app.route("/api/weather/forecast", methods=["GET"])
 def get_weather_forecast():
-    """Get weather forecast from OpenWeatherMap API"""
+    """Keep the legacy URL while retrieving current OpenWeather conditions."""
     if not OPENWEATHER_API_KEY:
         return jsonify({"error": "OpenWeatherMap API key not configured"}), 500
 
     try:
         # Get location from config or use defaults
-        config_data = config.find_one({}, {'_id': 0})
-        location = config_data.get('location', {}) if config_data else {}
-        
+        config_data = config.find_one({}, {"_id": 0})
+        location = config_data.get("location", {}) if config_data else {}
+
         # Get current weather data
         url = f"https://api.openweathermap.org/data/2.5/weather"
         params = {
-            'lat': location.get('latitude', WEATHER_LOCATION_LAT),
-            'lon': location.get('longitude', WEATHER_LOCATION_LON),
-            'appid': OPENWEATHER_API_KEY,
-            'units': 'metric'
+            "lat": location.get("latitude", WEATHER_LOCATION_LAT),
+            "lon": location.get("longitude", WEATHER_LOCATION_LON),
+            "appid": OPENWEATHER_API_KEY,
+            "units": "metric",
+            "lang": "uk",
         }
 
         response = requests.get(url, params=params, timeout=10)
@@ -367,103 +350,83 @@ def get_weather_forecast():
 
         # Extract relevant weather data
         forecast_data = {
-             'temperature': data['main']['temp'],
-             'humidity': data['main']['humidity'],
-             'pressure': data['main']['pressure'],
-             'description': data['weather'][0]['description'],
-             'timestamp': datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-             'location': data['name']
-         }
+            "temperature": data["main"]["temp"],
+            "humidity": data["main"]["humidity"],
+            "pressure": data["main"]["pressure"],
+            "description": data["weather"][0]["description"],
+            "timestamp": datetime.fromtimestamp(data["dt"], timezone.utc).isoformat(),
+            "location": data["name"],
+        }
 
         return jsonify(forecast_data), 200
 
     except requests.RequestException as e:
-        app.logger.error(f"Weather API error: {str(e)}")
-        return jsonify({"error": "Помилка отримання даних прогнозу погоди"}), 500
+        app.logger.warning("OpenWeather request failed: %s", type(e).__name__)
+        return jsonify({"error": "Не вдалося отримати поточну погоду OpenWeather."}), 500
     except Exception as e:
-        app.logger.error(f"Forecast error: {str(e)}")
+        app.logger.warning("OpenWeather response invalid: %s", type(e).__name__)
         return jsonify({"error": "Внутрішня помилка сервера"}), 500
 
 
-@app.route('/api/weather/comparison', methods=['GET'])
+@app.route("/api/weather/comparison", methods=["GET"])
 def get_weather_comparison():
-    """Compare weather station data with forecast"""
-    try:
-        # Get latest weather station data from MongoDB
-        station_data = collection.find_one({}, {'_id': 0}, sort=[('timestamp', -1)])
-
-        if not station_data:
-            return jsonify({"error": "No weather station data found in database"}), 404
-
-        # Get weather forecast
-        forecast_response = get_weather_forecast()
-        if forecast_response[1] != 200:
-            return forecast_response
-
-        forecast_data = forecast_response[0].get_json()
-
-        # Calculate differences
-        station_temp = station_data['environment']['temperature']
-        station_humidity = station_data['environment']['humidity']
-        station_pressure = station_data['environment']['pressure']
-
-        forecast_temp = forecast_data['temperature']
-        forecast_humidity = forecast_data['humidity']
-        forecast_pressure = forecast_data['pressure']
-
-        comparison = {
-            'timestamp': station_data['timestamp'],
-            'temperature': {
-                'station': round(station_temp, 2),
-                'forecast': forecast_temp,
-                'difference': round(station_temp - forecast_temp, 1),
-                'difference_percent': round(((station_temp - forecast_temp) / forecast_temp) * 100,
-                                            1) if forecast_temp != 0 else 0
-            },
-            'humidity': {
-                'station': round(station_humidity, 2),
-                'forecast': forecast_humidity,
-                'difference': round(station_humidity - forecast_humidity, 1),
-                'difference_percent': round(((station_humidity - forecast_humidity) / forecast_humidity) * 100,
-                                            1) if forecast_humidity != 0 else 0
-            },
-            'pressure': {
-                'station': round(station_pressure, 2),
-                'forecast': forecast_pressure,
-                'difference': round(station_pressure - forecast_pressure, 1),
-                'difference_percent': round(((station_pressure - forecast_pressure) / forecast_pressure) * 100,
-                                            1) if forecast_pressure != 0 else 0
-            },
-            'forecast_description': forecast_data['description'],
-            'location': forecast_data['location']
+    station = latest_reading(collection)
+    if not station:
+        return jsonify({"error": "Станція ще не передала вимірювань."}), 404
+    reference_response, status = get_weather_forecast()
+    if status != 200:
+        return reference_response, status
+    reference = reference_response.get_json()
+    comparison = {
+        "timestamp": station["timestamp"],
+        "reference_timestamp": reference["timestamp"],
+        "forecast_description": reference["description"],
+        "location": reference["location"],
+    }
+    for metric in ["temperature", "humidity", "pressure"]:
+        observed = finite_number(station.get("environment", {}).get(metric))
+        external = finite_number(reference.get(metric))
+        if observed is None or external is None:
+            return (
+                jsonify(
+                    {"error": "Для зіставлення потрібні температура, вологість і тиск обох джерел."}
+                ),
+                422,
+            )
+        difference = observed - external
+        comparison[metric] = {
+            "station": round(observed, 2),
+            "forecast": external,
+            "difference": round(difference, 1),
+            # Retained for older API clients; the interface uses absolute differences.
+            "difference_percent": round(difference / external * 100, 1) if external else 0,
         }
+    return jsonify(comparison)
 
-        return jsonify(comparison), 200
 
-    except Exception as e:
-        app.logger.error(f"Comparison error: {str(e)}")
-        return jsonify({"error": "Помилка порівняння даних"}), 500
-
-# Шлях для сторінок
 @app.route("/web", methods=["GET"])
 def index_page():
     return render_template("index.html")
+
 
 @app.route("/web/history")
 def history_page():
     return render_template("history.html")
 
+
 @app.route("/web/settings")
 def settings_page():
     return render_template("settings.html")
+
 
 @app.route("/web/comparison")
 def comparison_page():
     return render_template("comparison.html")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     from waitress import serve
-    print("Starting production server with Waitress on http://0.0.0.0:5000")
-    serve(app, host='0.0.0.0', port=5000)
 
-
+    port = int(os.environ.get("PORT", "5000"))
+    print(f"Starting production server with Waitress on http://0.0.0.0:{port}")
+    serve(app, host="0.0.0.0", port=port)
